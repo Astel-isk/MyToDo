@@ -9,8 +9,8 @@ let tasks = [];
 let tagCatalog = [];
 let activeTags = new Set();
 let selectedTags = new Set();
-let pendingNewTags = new Set();
 let showDone = false;
+let editingTags = false;
 
 /** APIを叩く。未認証ならログイン画面へ戻す */
 async function api(path, options = {}) {
@@ -173,22 +173,25 @@ async function load() {
 function renderFilters() {
   const filters = $("filters");
   filters.hidden = tagCatalog.length === 0;
-  $("clear-filter").hidden = activeTags.size === 0;
+  filters.classList.toggle("editing", editingTags);
+  $("clear-filter").hidden = activeTags.size === 0 || editingTags;
+  $("edit-tags").setAttribute("aria-pressed", String(editingTags));
 
   const chips = tagCatalog.map((tag) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip";
-    const active = activeTags.has(tag.name);
+    const active = !editingTags && activeTags.has(tag.name);
     chip.setAttribute("aria-pressed", String(active));
     chip.textContent = tag.name;
 
-    const count = document.createElement("span");
-    count.className = "count";
-    count.textContent = showDone ? tag.count : tag.open_count;
-    chip.append(count);
+    const suffix = document.createElement("span");
+    suffix.className = editingTags ? "remove-mark" : "count";
+    suffix.textContent = editingTags ? "×" : showDone ? tag.count : tag.open_count;
+    chip.append(suffix);
 
     chip.addEventListener("click", async () => {
+      if (editingTags) return askToDelete(tag);
       if (active) activeTags.delete(tag.name);
       else activeTags.add(tag.name);
       await load();
@@ -198,14 +201,34 @@ function renderFilters() {
   $("filter-tags").replaceChildren(...chips);
 }
 
+/** 消すと戻せないので、影響する件数を見せてから確認する */
+function askToDelete(tag) {
+  const affected = tag.count
+    ? `${tag.count}件のタスクから外れます(タスク自体は残ります)。`
+    : "どのタスクにも付いていません。";
+  $("tag-delete-message").textContent = `「${tag.name}」を消します。${affected}`;
+  $("tag-delete-confirm").hidden = false;
+  $("tag-delete-yes").onclick = async () => {
+    closeDeletePrompt();
+    activeTags.delete(tag.name);
+    selectedTags.delete(tag.name);
+    await api(`/tags/${encodeURIComponent(tag.name)}`, { method: "DELETE" });
+    await load();
+  };
+  $("tag-delete-no").onclick = closeDeletePrompt;
+}
+
+function closeDeletePrompt() {
+  $("tag-delete-confirm").hidden = true;
+  $("tag-delete-message").textContent = "";
+}
+
 /**
  * 入力欄のタグ選択。既存のタグを押して付ける形にし、新規作成は「＋ 新規」から
  * 確認を挟んで行う。自由入力にすると打ち間違いや言い換えで似たタグが増えるため。
  */
 function renderTagPicker() {
-  const names = [...new Set([...tagCatalog.map((t) => t.name), ...pendingNewTags])];
-
-  const chips = names.map((name) => {
+  const chips = tagCatalog.map(({ name }) => {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip";
@@ -242,8 +265,7 @@ function proposeNewTag() {
   field.hidden = true;
   if (!name) return;
 
-  const known = tagCatalog.some((tag) => tag.name === name) || pendingNewTags.has(name);
-  if (known) {
+  if (tagCatalog.some((tag) => tag.name === name)) {
     selectedTags.add(name);
     renderTagPicker();
     return;
@@ -258,10 +280,17 @@ function askToCreate(name) {
     ? `「${name}」は新しいタグです。今あるのは ${existing.join("、")} です。`
     : `「${name}」を最初のタグとして作ります。`;
   $("new-tag-confirm").hidden = false;
-  $("new-tag-yes").onclick = () => {
-    pendingNewTags.add(name);
-    selectedTags.add(name);
+  $("new-tag-yes").onclick = async () => {
     closeCreatePrompt();
+    selectedTags.add(name);
+    try {
+      // タスクの保存を待たずに作る。タグはタスクと独立して存在する
+      const { tags } = await api("/tags", { method: "POST", body: JSON.stringify({ name }) });
+      tagCatalog = tags;
+    } catch {
+      selectedTags.delete(name);
+    }
+    renderFilters();
     renderTagPicker();
   };
   $("new-tag-no").onclick = closeCreatePrompt;
@@ -333,18 +362,16 @@ $("add-form").addEventListener("submit", async (event) => {
   if (!title) return;
   const due = $("due").value || null;
   const tags = [...selectedTags];
-  const allowNewTags = [...pendingNewTags].filter((name) => selectedTags.has(name));
 
   $("title").value = "";
   $("due").value = "";
   selectedTags.clear();
-  pendingNewTags.clear();
   closeCreatePrompt();
   $("add-form").classList.remove("expanded");
 
   await api("/tasks", {
     method: "POST",
-    body: JSON.stringify({ title, due, tags, allowNewTags }),
+    body: JSON.stringify({ title, due, tags }),
   });
   await load();
 });
@@ -352,6 +379,12 @@ $("add-form").addEventListener("submit", async (event) => {
 $("clear-filter").addEventListener("click", async () => {
   activeTags.clear();
   await load();
+});
+
+$("edit-tags").addEventListener("click", () => {
+  editingTags = !editingTags;
+  closeDeletePrompt();
+  renderFilters();
 });
 
 // やることを書き始めたときだけ、タグと期限の欄を出す

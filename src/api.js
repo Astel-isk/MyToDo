@@ -35,7 +35,8 @@ export function normalizeTags(input) {
 
 /**
  * まだ存在しない名前を返す。
- * タグは打ち間違いや言い換えで際限なく増えるため、作成は明示的に許した名前だけに限る。
+ * タグは打ち間違いや言い換えで際限なく増えるため、作成は /api/tags でしか行えない。
+ * タスクの側から知らない名前が来たら、作らずに断る。
  */
 export async function findUnknownTags(env, names) {
   if (names.length === 0) return [];
@@ -64,26 +65,38 @@ export async function setTags(env, taskId, names) {
   await env.DB.batch(statements);
 }
 
-/** 使われているタグを、使用数の多い順に返す。絞り込みの候補として使う */
+/**
+ * タグを使用数の多い順に返す。タスクが1件も付いていないタグも含める。
+ * 先に語彙を決めてから使う運用のため、タグはタスクと独立に存在する。
+ */
 export async function listTags(env) {
   const { results } = await env.DB.prepare(
     `SELECT tags.name AS name,
             COUNT(task_tags.task_id) AS count,
-            SUM(CASE WHEN tasks.done = 0 THEN 1 ELSE 0 END) AS open_count
+            COALESCE(SUM(CASE WHEN tasks.done = 0 THEN 1 ELSE 0 END), 0) AS open_count
        FROM tags
-       JOIN task_tags ON task_tags.tag_id = tags.id
-       JOIN tasks ON tasks.id = task_tags.task_id
+       LEFT JOIN task_tags ON task_tags.tag_id = tags.id
+       LEFT JOIN tasks ON tasks.id = task_tags.task_id
       GROUP BY tags.id
       ORDER BY open_count DESC, count DESC, tags.name ASC`
   ).all();
   return results;
 }
 
-/** どのタスクからも外れたタグを片付ける */
-async function pruneTags(env) {
-  await env.DB.prepare(
-    "DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM task_tags)"
-  ).run();
+/** タグを単独で作る。同じ名前があれば何もしない */
+export async function createTag(env, name) {
+  await env.DB.prepare("INSERT OR IGNORE INTO tags (name) VALUES (?)").bind(name).run();
+}
+
+/** タグを消す。付いていたタスクからは外れるが、タスク自体は残る */
+export async function deleteTag(env, name) {
+  const row = await env.DB.prepare("SELECT id FROM tags WHERE name = ?").bind(name).first();
+  if (!row) return null;
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM task_tags WHERE tag_id = ?").bind(row.id),
+    env.DB.prepare("DELETE FROM tags WHERE id = ?").bind(row.id),
+  ]);
+  return name;
 }
 
 // --- タスク -----------------------------------------------------------------
@@ -164,19 +177,15 @@ export async function updateTask(env, id, fields, tags = null) {
     return null;
   }
 
-  if (tags) {
-    await setTags(env, id, tags);
-    await pruneTags(env);
-  }
+  if (tags) await setTags(env, id, tags);
   return findTask(env, id);
 }
 
 export async function deleteTask(env, id) {
   const row = await env.DB.prepare("DELETE FROM tasks WHERE id = ? RETURNING id").bind(id).first();
   if (!row) return null;
-  // 外部キーの連鎖に頼らず、結び付きと孤立したタグを明示的に片付ける
+  // 外部キーの連鎖に頼らず、結び付きを明示的に片付ける。タグ自体は残す
   await env.DB.prepare("DELETE FROM task_tags WHERE task_id = ?").bind(id).run();
-  await pruneTags(env);
   return row.id;
 }
 
@@ -195,6 +204,25 @@ export async function handleTags(env) {
   return json({ tags: await listTags(env) });
 }
 
+export async function handleCreateTag(request, env) {
+  const body = await readJson(request);
+  if (!body) return error("リクエスト本文がJSONではありません", 400);
+
+  const [name] = normalizeTags([body?.name]) || [];
+  if (!name) return error("name は必須です", 400);
+
+  await createTag(env, name);
+  return json({ tags: await listTags(env) }, 201);
+}
+
+export async function handleDeleteTag(env, rawName) {
+  const [name] = normalizeTags([rawName]) || [];
+  if (!name) return error("タグ名がありません", 400);
+
+  const deleted = await deleteTag(env, name);
+  return deleted ? json({ deleted }) : error("該当するタグがありません", 404);
+}
+
 export async function handleCreate(request, env) {
   const body = await readJson(request);
   if (!body) return error("リクエスト本文がJSONではありません", 400);
@@ -203,7 +231,7 @@ export async function handleCreate(request, env) {
   if (!fields.title) return error("title は必須です", 400);
 
   const tags = normalizeTags(body.tags) || [];
-  const rejected = await rejectUnknownTags(env, tags, body.allowNewTags);
+  const rejected = await rejectUnknownTags(env, tags);
   if (rejected) return rejected;
 
   return json({ task: await createTask(env, fields, tags) }, 201);
@@ -219,7 +247,7 @@ export async function handleUpdate(request, env, id) {
   if (Object.keys(fields).length === 0 && !tags) return error("更新する項目がありません", 400);
 
   if (tags) {
-    const rejected = await rejectUnknownTags(env, tags, body.allowNewTags);
+    const rejected = await rejectUnknownTags(env, tags);
     if (rejected) return rejected;
   }
 
@@ -227,10 +255,9 @@ export async function handleUpdate(request, env, id) {
   return task ? json({ task }) : error("該当するタスクがありません", 404);
 }
 
-/** 作成を許していない名前が混ざっていれば、使えるタグを添えて返す */
-async function rejectUnknownTags(env, tags, allowNewTags) {
-  const allowed = new Set(normalizeTags(allowNewTags) || []);
-  const unknown = (await findUnknownTags(env, tags)).filter((name) => !allowed.has(name));
+/** 存在しない名前が混ざっていれば、使えるタグを添えて返す */
+async function rejectUnknownTags(env, tags) {
+  const unknown = await findUnknownTags(env, tags);
   if (unknown.length === 0) return null;
 
   const available = (await listTags(env)).map((tag) => tag.name);

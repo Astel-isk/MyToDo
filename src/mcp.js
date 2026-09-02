@@ -160,7 +160,7 @@ export function createServer(env) {
     "list_tags",
     {
       description:
-        "使われているタグを、未完了のタスクが多い順に返す。add_task でタグを付ける前に、既存の名前を確かめて表記ゆれを避けるために使う",
+        "使えるタグを、未完了のタスクが多い順に返す。まだどのタスクにも付いていないタグも含む。add_task でタグを付ける前に、既存の名前を確かめて表記ゆれを避けるために使う",
       inputSchema: {},
     },
     async () => {
@@ -168,7 +168,7 @@ export function createServer(env) {
       return text(
         tags.length
           ? tags.map((t) => `#${t.name}(未完了 ${t.open_count} / 全 ${t.count})`).join("\n")
-          : "まだタグは使われていません"
+          : "タグはまだ1つも作られていません"
       );
     }
   );

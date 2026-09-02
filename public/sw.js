@@ -6,7 +6,7 @@
  * 文面はここで /api/tasks を読んで組み立てる。
  */
 
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL = ["/", "/style.css", "/app.js", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {

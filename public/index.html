@@ -45,6 +45,15 @@
         <div id="filters" hidden>
           <button id="clear-filter" type="button" class="chip chip-clear" hidden>絞り込みを解除</button>
           <div id="filter-tags"></div>
+          <button id="edit-tags" type="button" class="chip chip-edit" aria-pressed="false">
+            編集
+          </button>
+        </div>
+
+        <div id="tag-delete-confirm" class="confirm" hidden>
+          <span id="tag-delete-message"></span>
+          <button id="tag-delete-yes" type="button">削除</button>
+          <button id="tag-delete-no" type="button" class="ghost">やめる</button>
         </div>
       </header>
 
@@ -76,7 +85,7 @@
             hidden
           />
 
-          <div id="new-tag-confirm" hidden>
+          <div id="new-tag-confirm" class="confirm" hidden>
             <span id="new-tag-message"></span>
             <button id="new-tag-yes" type="button">作る</button>
             <button id="new-tag-no" type="button" class="ghost">やめる</button>

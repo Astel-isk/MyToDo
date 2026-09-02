@@ -407,6 +407,36 @@ li.done .title {
   border-style: dashed;
 }
 
+.chip-edit {
+  border-style: dashed;
+}
+
+/* 編集中はチップの意味が「絞り込む」から「消す」に変わるため、見た目も変える */
+#filters.editing .chip {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+
+#filters.editing .chip-edit {
+  background: var(--surface-raised);
+}
+
+.chip .remove-mark {
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+/* 削除の確認は、作成の確認と同じ形にしつつ枠の色で区別する */
+#tag-delete-confirm {
+  margin-top: 8px;
+  border-color: var(--alert);
+}
+
+#tag-delete-yes {
+  background: var(--alert);
+  color: var(--on-accent);
+}
+
 /* 行に出すタグ。押せないので、絞り込みのチップとは形を変える */
 .tags {
   display: flex;
@@ -466,8 +496,8 @@ li.done .tag {
   border-style: dashed;
 }
 
-/* 新しいタグを作る前の確認。画面を塞ぐダイアログにせず、その場に出す */
-#new-tag-confirm {
+/* タグを作る前・消す前の確認。画面を塞ぐダイアログにせず、その場に出す */
+.confirm {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -479,11 +509,12 @@ li.done .tag {
   font-size: 0.9rem;
 }
 
-#new-tag-message {
+#new-tag-message,
+#tag-delete-message {
   flex: 1 1 100%;
 }
 
-#new-tag-confirm button {
+.confirm button {
   min-height: 40px;
   padding: 0 16px;
   font-size: 0.9rem;

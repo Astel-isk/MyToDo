@@ -5,8 +5,10 @@
  *   POST   /api/login                        パスワード認証。セッションのクッキーを配る
  *   POST   /api/logout                       クッキーを消す
  *   GET    /api/tasks?status=open|done|all&tag=…  一覧(tagは複数指定可)
- *   GET    /api/tags                         使われているタグと使用数
- *   POST   /api/tasks                        追加  {title, note?, due?}
+ *   GET    /api/tags                         タグと使用数(未使用のものも含む)
+ *   POST   /api/tags                        タグを作る  {name}
+ *   DELETE /api/tags/:name                   タグを消す(タスクは残る)
+ *   POST   /api/tasks                        追加  {title, note?, due?, tags?}
  *   PATCH  /api/tasks/:id                    更新  {title?, note?, due?, done?}
  *   DELETE /api/tasks/:id                    削除
  *   GET    /api/push/key                     購読に使うVAPIDの公開鍵
@@ -20,7 +22,15 @@
 
 import { error, json } from "./http.js";
 import { authenticate, handleLogin, handleLogout } from "./auth.js";
-import { handleList, handleTags, handleCreate, handleUpdate, handleDelete } from "./api.js";
+import {
+  handleList,
+  handleTags,
+  handleCreateTag,
+  handleDeleteTag,
+  handleCreate,
+  handleUpdate,
+  handleDelete,
+} from "./api.js";
 import { handleAuthorize } from "./authorize.js";
 import { handleKey, handleSubscribe, handleUnsubscribe, handleTest } from "./push.js";
 
@@ -48,7 +58,15 @@ export default {
     }
 
     if (pathname === "/api/tags") {
-      return request.method === "GET" ? handleTags(env) : error("Method Not Allowed", 405);
+      if (request.method === "GET") return handleTags(env);
+      if (request.method === "POST") return handleCreateTag(request, env);
+      return error("Method Not Allowed", 405);
+    }
+
+    // タグ名はそのままパスに入るため、比較の前にデコードする
+    if (pathname.startsWith("/api/tags/")) {
+      if (request.method !== "DELETE") return error("Method Not Allowed", 405);
+      return handleDeleteTag(env, decodeURIComponent(pathname.slice("/api/tags/".length)));
     }
 
     if (pathname === "/api/push/key") {
