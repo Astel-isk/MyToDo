@@ -8,8 +8,8 @@
 import { deflateSync } from "node:zlib";
 import { writeFileSync } from "node:fs";
 
-const BG = [0x1f, 0x6f, 0x5c]; // 深い緑
-const FG = [0xff, 0xff, 0xff];
+const BG = [0xff, 0xff, 0xff]; // 白背景
+const FG = [0x18, 0x63, 0xdc]; // 寒色(青)のチェック
 
 const crcTable = Array.from({ length: 256 }, (_, n) => {
   let c = n;

@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const login = $("login");
 const app = $("app");
-const list = $("tasks");
+const listRoot = $("list");
 
 let tasks = [];
 let showDone = false;
@@ -36,34 +36,74 @@ function showApp() {
   app.hidden = false;
 }
 
-const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+// --- 期限の扱い -------------------------------------------------------------
 
-function formatDue(due) {
-  if (!due) return "";
-  const diff = Math.round((new Date(due) - new Date(today())) / 86400000);
-  if (diff === 0) return "今日";
-  if (diff === 1) return "明日";
-  if (diff === -1) return "昨日";
-  const [, month, day] = due.split("-");
-  return `${Number(month)}/${Number(day)}`;
+const today = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD
+const daysFromToday = (due) => Math.round((new Date(due) - new Date(today())) / 86400000);
+
+/** 一覧を「いつやるか」で区分けする。並べ替えの順序はサーバ側と揃えてある */
+const GROUPS = ["期限切れ", "今日", "明日", "今週", "この先", "期限なし", "完了"];
+
+function groupOf(task) {
+  if (task.done) return "完了";
+  if (!task.due) return "期限なし";
+  const days = daysFromToday(task.due);
+  if (days < 0) return "期限切れ";
+  if (days === 0) return "今日";
+  if (days === 1) return "明日";
+  if (days <= 7) return "今週";
+  return "この先";
 }
+
+/** 区分けの中では、日付そのものは補助情報なので短く出す */
+function dueLabel(task) {
+  if (!task.due) return "";
+  const days = daysFromToday(task.due);
+  if (days === 0 || days === 1) return ""; // 「今日」「明日」の見出しと重複する
+  const [, month, day] = task.due.split("-");
+  const date = `${Number(month)}/${Number(day)}`;
+  if (days < 0 && !task.done) return `${date}(${-days}日超過)`;
+  return date;
+}
+
+// --- 描画 -------------------------------------------------------------------
 
 function render() {
   const visible = tasks.filter((task) => showDone || !task.done);
-  list.replaceChildren(...visible.map(row));
   $("empty").hidden = visible.length > 0;
-  $("toggle-done").textContent = showDone ? "完了したものを隠す" : "完了したものを表示";
+
+  const sections = GROUPS.map((name) => [name, visible.filter((t) => groupOf(t) === name)])
+    .filter(([, items]) => items.length > 0)
+    .map(([name, items]) => section(name, items));
+
+  listRoot.replaceChildren(...sections);
+  $("toggle-done").setAttribute("aria-pressed", String(showDone));
+}
+
+function section(name, items) {
+  const wrapper = document.createElement("section");
+  wrapper.className = "group" + (name === "期限切れ" ? " overdue" : "");
+
+  const heading = document.createElement("h2");
+  heading.textContent = `${name}(${items.length})`;
+
+  const ul = document.createElement("ul");
+  ul.append(...items.map(row));
+
+  wrapper.append(heading, ul);
+  return wrapper;
 }
 
 function row(task) {
   const li = document.createElement("li");
   li.className = task.done ? "done" : "";
+  li.dataset.id = task.id;
 
   const check = document.createElement("input");
   check.type = "checkbox";
   check.checked = task.done;
-  check.ariaLabel = "完了";
-  check.addEventListener("change", () => setDone(task, check.checked));
+  check.ariaLabel = `${task.title} を完了にする`;
+  check.addEventListener("change", () => setDone(task, check.checked, li));
 
   const body = document.createElement("div");
   body.className = "body";
@@ -72,23 +112,26 @@ function row(task) {
   title.textContent = task.title;
   body.append(title);
 
-  if (task.due) {
-    const due = document.createElement("span");
-    due.className = "due" + (!task.done && task.due < today() ? " overdue" : "");
-    due.textContent = formatDue(task.due);
-    body.append(document.createElement("br"), due);
+  const detail = [dueLabel(task), task.note].filter(Boolean).join(" ・ ");
+  if (detail) {
+    const note = document.createElement("span");
+    note.className = "note";
+    note.textContent = detail;
+    body.append(note);
   }
 
   const remove = document.createElement("button");
   remove.className = "delete";
   remove.type = "button";
   remove.textContent = "×";
-  remove.ariaLabel = "削除";
-  remove.addEventListener("click", () => remove_(task));
+  remove.ariaLabel = `${task.title} を削除`;
+  remove.addEventListener("click", () => removeTask(task, li));
 
   li.append(check, body, remove);
   return li;
 }
+
+// --- 操作 -------------------------------------------------------------------
 
 async function load() {
   const { tasks: fetched } = await api(`/tasks?status=${showDone ? "all" : "open"}`);
@@ -96,22 +139,31 @@ async function load() {
   render();
 }
 
-/** 完了のトグルは先に画面を書き換え、失敗したら戻す */
-async function setDone(task, done) {
+/** 一覧から消える操作は、消えることを見せてから作り直す */
+const fadeOut = (li) =>
+  new Promise((resolve) => {
+    li.classList.add("leaving");
+    setTimeout(resolve, 180);
+  });
+
+async function setDone(task, done, li) {
   const before = task.done;
   task.done = done;
-  render();
+  const leaving = !showDone && done;
+  if (leaving) await fadeOut(li);
+
   try {
     await api(`/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ done }) });
-    if (!showDone && done) await load();
+    await load();
   } catch {
     task.done = before;
     render();
   }
 }
 
-async function remove_(task) {
+async function removeTask(task, li) {
   const index = tasks.indexOf(task);
+  await fadeOut(li);
   tasks.splice(index, 1);
   render();
   try {
@@ -121,6 +173,8 @@ async function remove_(task) {
     render();
   }
 }
+
+// --- 入力 -------------------------------------------------------------------
 
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();

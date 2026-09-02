@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#1f6f5c" />
+    <meta name="theme-color" content="#121212" />
     <title>ToDo</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon-192.png" />
@@ -11,43 +11,57 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <!-- 未ログインのとき -->
+    <!-- 未ログイン -->
     <section id="login" hidden>
-      <h1>ToDo</h1>
-      <form id="login-form">
-        <input
-          id="password"
-          type="password"
-          name="password"
-          placeholder="パスワード"
-          autocomplete="current-password"
-          required
-        />
-        <button type="submit">ログイン</button>
-      </form>
-      <p id="login-error" class="error" hidden></p>
+      <div class="login-inner">
+        <h1>ToDo</h1>
+        <form id="login-form">
+          <input
+            id="password"
+            type="password"
+            placeholder="パスワード"
+            autocomplete="current-password"
+            enterkeyhint="go"
+            required
+          />
+          <button type="submit">ログイン</button>
+        </form>
+        <p id="login-error" class="error" role="alert" hidden></p>
+      </div>
     </section>
 
-    <!-- ログイン済みのとき -->
-    <main id="app" hidden>
+    <!-- ログイン済み -->
+    <div id="app" hidden>
       <header>
         <h1>ToDo</h1>
-        <button id="logout" class="link" type="button">ログアウト</button>
+        <nav>
+          <button id="toggle-done" type="button" class="ghost" aria-pressed="false">完了分</button>
+          <button id="logout" type="button" class="ghost">ログアウト</button>
+        </nav>
       </header>
 
+      <main id="list" aria-live="polite"></main>
+
+      <div id="empty" hidden>
+        <p class="empty-title">タスクはありません</p>
+        <p class="empty-hint">下の欄に入力して追加してください</p>
+      </div>
+
       <form id="add-form">
-        <input id="title" type="text" placeholder="やること" required />
-        <div class="row">
+        <input
+          id="title"
+          type="text"
+          placeholder="やることを入力"
+          autocomplete="off"
+          enterkeyhint="done"
+          required
+        />
+        <div class="composer-row">
           <input id="due" type="date" aria-label="期限" />
           <button type="submit">追加</button>
         </div>
       </form>
-
-      <ul id="tasks"></ul>
-      <p id="empty" class="muted" hidden>タスクはありません</p>
-
-      <button id="toggle-done" class="link" type="button">完了したものを表示</button>
-    </main>
+    </div>
 
     <script src="/app.js"></script>
   </body>

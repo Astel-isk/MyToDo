@@ -1,23 +1,39 @@
+/*
+ * 配色の方針
+ *  - 既定をダークにする(常用がダークのため、環境の判定に依存させない)
+ *  - 背景・面・境界はすべて無彩色。純黒(#000)は使わず #121212 を基準にし、
+ *    面が上に重なるほど明度を上げて階層を出す
+ *  - 色を持つのはアクセント(寒色)と、期限切れの警告のみ
+ *  - 本文は純白にしない(暗所での滲みを避ける)
+ */
+
 :root {
-  --bg: #f6f7f6;
-  --surface: #ffffff;
-  --text: #16211d;
-  --muted: #6b7a75;
-  --line: #dfe4e2;
-  --accent: #1f6f5c;
-  --danger: #b3261e;
-  --tap: 48px; /* 片手で押せる最小の大きさ */
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --surface-raised: #262626;
+  --line: #333333;
+  --text: #e8e8e8;
+  --muted: #a0a0a0;
+  --accent: #6ea8fe;
+  --on-accent: #10151d;
+  --alert: #ff8a80;
+
+  --tap: 48px;
+  --radius: 12px;
+  --gap: 8px;
 }
 
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --bg: #101512;
-    --surface: #1a221e;
-    --text: #e8efec;
-    --muted: #93a29c;
-    --line: #2b352f;
-    --accent: #4fbfa2;
-    --danger: #f2b8b5;
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --line: #e0e0e0;
+    --text: #1a1a1a;
+    --muted: #5f5f5f;
+    --accent: #1863dc;
+    --on-accent: #ffffff;
+    --alert: #c62828;
   }
 }
 
@@ -30,86 +46,164 @@
   display: none !important;
 }
 
+html {
+  background: var(--bg);
+}
+
 body {
   margin: 0;
-  padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   font-size: 16px;
   line-height: 1.6;
-  max-width: 640px;
-  margin-inline: auto;
+  -webkit-tap-highlight-color: transparent;
 }
 
-h1 {
-  font-size: 1.35rem;
-  margin: 0;
-}
-
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
+/* --- 共通の部品 ---------------------------------------------------------- */
 
 input,
 button {
   font: inherit;
-  min-height: var(--tap);
   border-radius: 10px;
 }
 
 input {
   width: 100%;
-  padding: 0 12px;
+  min-height: var(--tap);
+  padding: 0 14px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--text);
 }
 
-input:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+input::placeholder {
+  color: var(--muted);
 }
 
 button {
-  padding: 0 18px;
+  min-height: var(--tap);
+  padding: 0 20px;
   border: none;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
   cursor: pointer;
 }
 
-button.link {
-  min-height: var(--tap);
-  padding: 0 4px;
+button.ghost {
+  padding: 0 10px;
   background: none;
   color: var(--muted);
   font-weight: 400;
-  text-decoration: underline;
 }
 
-form {
+button.ghost[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  color: var(--alert);
+}
+
+/* --- ログイン ------------------------------------------------------------ */
+
+#login {
   display: grid;
-  gap: 8px;
-  margin-bottom: 20px;
+  place-items: center;
+  min-height: 100dvh;
+  padding: 24px;
 }
 
-.row {
+.login-inner {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.login-inner h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  text-align: center;
+}
+
+#login-form {
+  display: grid;
+  gap: 10px;
+}
+
+/* --- 本体のレイアウト ---------------------------------------------------- */
+
+#app {
   display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 
-.row input {
+header h1 {
+  margin: 0 0 0 4px;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+nav {
+  display: flex;
+}
+
+main {
   flex: 1;
+  padding: 4px 12px 16px;
 }
 
-.row button {
-  flex: 0 0 auto;
+/* 空のときは高さを取らせず、案内を画面の中央に置く */
+main:empty {
+  flex: 0;
+  padding: 0;
+}
+
+/* --- 期限による区分け ---------------------------------------------------- */
+
+.group {
+  margin-top: 18px;
+}
+
+.group:first-child {
+  margin-top: 10px;
+}
+
+.group h2 {
+  margin: 0 0 8px 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: none;
+}
+
+.group.overdue h2 {
+  color: var(--alert);
 }
 
 ul {
@@ -117,38 +211,41 @@ ul {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: var(--gap);
 }
 
 li {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 6px 6px 6px 12px;
   min-height: var(--tap);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-li.done .title {
-  color: var(--muted);
-  text-decoration: line-through;
+/* 完了・削除の直後に、消えることを見せてから作り直す */
+li.leaving {
+  opacity: 0;
+  transform: translateX(12px);
 }
 
-/* チェックボックスは指で押せる大きさにする */
 li input[type="checkbox"] {
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   min-height: 0;
   margin: 0;
+  padding: 0;
   accent-color: var(--accent);
 }
 
 .body {
   flex: 1;
   min-width: 0;
+  padding: 4px 0;
 }
 
 .title {
@@ -156,35 +253,80 @@ li input[type="checkbox"] {
   overflow-wrap: anywhere;
 }
 
-.due {
-  font-size: 0.8rem;
+li.done .title {
   color: var(--muted);
+  text-decoration: line-through;
 }
 
-.due.overdue {
-  color: var(--danger);
+.note {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .delete {
   flex: 0 0 auto;
-  width: var(--tap);
-  min-height: var(--tap);
+  width: 40px;
+  min-height: 40px;
   padding: 0;
   background: none;
   color: var(--muted);
-  font-size: 1.25rem;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
-.muted {
-  color: var(--muted);
-}
+/* --- 空のとき ------------------------------------------------------------ */
 
-.error {
-  color: var(--danger);
-}
-
-#login {
-  margin-top: 12vh;
+#empty {
+  flex: 1;
   display: grid;
-  gap: 16px;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.empty-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.empty-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* --- 入力欄(下に固定) -------------------------------------------------- */
+
+#add-form {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: var(--gap);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: var(--surface-raised);
+  border-top: 1px solid var(--line);
+}
+
+.composer-row {
+  display: flex;
+  gap: var(--gap);
+}
+
+.composer-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-row button {
+  flex: 0 0 auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
