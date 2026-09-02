@@ -5,7 +5,7 @@
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { listTasks, createTask, updateTask, deleteTask } from "./api.js";
+import { listTasks, listTags, createTask, updateTask, deleteTask, normalizeTags } from "./api.js";
 
 /** このアプリが何を置く場所かを、ツールの説明に一貫して書くための前置き */
 const SCOPE_NOTE =
@@ -18,7 +18,14 @@ const text = (value) => ({
 
 /** 一覧の1件を1行で表す */
 const line = (task) =>
-  [`#${task.id}`, task.done ? "[完了]" : "[未完了]", task.title, task.due ? `期限:${task.due}` : "", task.note ? `メモ:${task.note}` : ""]
+  [
+    `#${task.id}`,
+    task.done ? "[完了]" : "[未完了]",
+    task.title,
+    task.due ? `期限:${task.due}` : "",
+    task.tags?.length ? task.tags.map((t) => `#${t}`).join(" ") : "",
+    task.note ? `メモ:${task.note}` : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -26,6 +33,10 @@ const DUE = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "期限は YYYY-MM-DD 形式で指定する")
   .describe("期限。YYYY-MM-DD 形式");
+
+const TAGS = z
+  .array(z.string().min(1).max(20))
+  .describe("タグ。学業・バイト・生活など、後で絞り込むための短い名前。既存のタグ名は list_tags で確認できる");
 
 export function createServer(env) {
   const server = new McpServer({ name: "todo", version: "1.0.0" });
@@ -39,10 +50,13 @@ export function createServer(env) {
           .enum(["open", "done", "all"])
           .optional()
           .describe("既定は open(未完了のみ)"),
+        tags: TAGS.optional().describe(
+          "指定するとそのいずれかのタグを持つものだけを返す(いずれか1つでも一致すればよい)"
+        ),
       },
     },
-    async ({ status }) => {
-      const tasks = await listTasks(env, status || "open");
+    async ({ status, tags }) => {
+      const tasks = await listTasks(env, status || "open", normalizeTags(tags) || []);
       return text(tasks.length ? tasks.map(line).join("\n") : "該当するタスクはありません");
     }
   );
@@ -55,10 +69,15 @@ export function createServer(env) {
         title: z.string().min(1).describe("やること。短く具体的に"),
         due: DUE.optional(),
         note: z.string().optional().describe("補足。省略してよい"),
+        tags: TAGS.optional(),
       },
     },
-    async ({ title, due, note }) => {
-      const task = await createTask(env, { title: title.trim(), due: due ?? null, note: note ?? null });
+    async ({ title, due, note, tags }) => {
+      const task = await createTask(
+        env,
+        { title: title.trim(), due: due ?? null, note: note ?? null },
+        normalizeTags(tags) || []
+      );
       return text(`追加した: ${line(task)}`);
     }
   );
@@ -85,18 +104,39 @@ export function createServer(env) {
         due: DUE.nullable().optional().describe("null を渡すと期限を外す"),
         note: z.string().nullable().optional(),
         done: z.boolean().optional(),
+        tags: TAGS.nullable().optional().describe("渡すとタグをこの集合で置き換える。[] で全部外す"),
       },
     },
-    async ({ id, ...changes }) => {
+    async ({ id, tags, ...changes }) => {
       const fields = {};
       for (const [key, value] of Object.entries(changes)) {
         if (value === undefined) continue;
         fields[key] = key === "done" ? (value ? 1 : 0) : value;
       }
-      if (Object.keys(fields).length === 0) return text("変更する項目が指定されていない");
+      const nextTags = normalizeTags(tags);
+      if (Object.keys(fields).length === 0 && !nextTags) {
+        return text("変更する項目が指定されていない");
+      }
 
-      const task = await updateTask(env, id, fields);
+      const task = await updateTask(env, id, fields, nextTags);
       return text(task ? `更新した: ${line(task)}` : `id ${id} のタスクが見つからない`);
+    }
+  );
+
+  server.registerTool(
+    "list_tags",
+    {
+      description:
+        "使われているタグを、未完了のタスクが多い順に返す。add_task でタグを付ける前に、既存の名前を確かめて表記ゆれを避けるために使う",
+      inputSchema: {},
+    },
+    async () => {
+      const tags = await listTags(env);
+      return text(
+        tags.length
+          ? tags.map((t) => `#${t.name}(未完了 ${t.open_count} / 全 ${t.count})`).join("\n")
+          : "まだタグは使われていません"
+      );
     }
   );
 

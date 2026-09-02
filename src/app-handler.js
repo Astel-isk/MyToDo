@@ -4,7 +4,8 @@
  *   GET    /api/health                       疎通確認(認証不要)
  *   POST   /api/login                        パスワード認証。セッションのクッキーを配る
  *   POST   /api/logout                       クッキーを消す
- *   GET    /api/tasks?status=open|done|all   一覧
+ *   GET    /api/tasks?status=open|done|all&tag=…  一覧(tagは複数指定可)
+ *   GET    /api/tags                         使われているタグと使用数
  *   POST   /api/tasks                        追加  {title, note?, due?}
  *   PATCH  /api/tasks/:id                    更新  {title?, note?, due?, done?}
  *   DELETE /api/tasks/:id                    削除
@@ -15,7 +16,7 @@
 
 import { error, json } from "./http.js";
 import { authenticate, handleLogin, handleLogout } from "./auth.js";
-import { handleList, handleCreate, handleUpdate, handleDelete } from "./api.js";
+import { handleList, handleTags, handleCreate, handleUpdate, handleDelete } from "./api.js";
 import { handleAuthorize } from "./authorize.js";
 
 export default {
@@ -39,6 +40,10 @@ export default {
 
     if (pathname === "/api/logout") {
       return request.method === "POST" ? handleLogout() : error("Method Not Allowed", 405);
+    }
+
+    if (pathname === "/api/tags") {
+      return request.method === "GET" ? handleTags(env) : error("Method Not Allowed", 405);
     }
 
     if (pathname === "/api/tasks") {

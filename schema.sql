@@ -1,5 +1,7 @@
--- 本番のD1へは適用済み(2026/9/2)。ローカル開発用DBの初期化に使う。
--- npx wrangler d1 execute todo --local --file=schema.sql
+-- 初期スキーマ。追加分は migrations/ にある(002以降)。
+-- ローカル開発用DBの初期化:
+--   npx wrangler d1 execute todo --local --file=schema.sql
+--   npx wrangler d1 execute todo --local --file=migrations/002_tags.sql
 
 CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

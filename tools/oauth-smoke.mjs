@@ -119,16 +119,19 @@ step("7. tools/list", tools.map((t) => t.name).join(", "));
 
 const added = await mcp("tools/call", {
   name: "add_task",
-  arguments: { title: "OAuth疎通のテスト", due: "2026-09-30" },
+  arguments: { title: "OAuth疎通のテスト", due: "2026-09-30", tags: ["疎通確認"] },
 });
 step("8. add_task", added.content[0].text);
 
 const listed = await mcp("tools/call", { name: "list_tasks", arguments: {} });
 step("9. list_tasks", listed.content[0].text.replace(/\n/g, " / "));
 
+const tagList = await mcp("tools/call", { name: "list_tags", arguments: {} });
+step("10. list_tags", tagList.content[0].text.split(String.fromCharCode(10)).join(" / "));
+
 const id = Number(added.content[0].text.match(/#(\d+)/)[1]);
 const removed = await mcp("tools/call", { name: "delete_task", arguments: { id } });
-step("10. delete_task", removed.content[0].text);
+step("11. delete_task", removed.content[0].text);
 
 // --- 7. 無効なトークン ------------------------------------------------------
 const rejected = await fetch(`${BASE}/mcp`, {
@@ -140,6 +143,6 @@ const rejected = await fetch(`${BASE}/mcp`, {
   },
   body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
 });
-step("11. 無効なトークン", `${rejected.status}(401であること)`);
+step("12. 無効なトークン", `${rejected.status}(401であること)`);
 
 console.log("\n通し確認 完了");

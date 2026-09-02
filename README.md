@@ -15,7 +15,7 @@
 
 - **OAuthまで実装する** — claude.aiの設定画面にヘッダ認証の欄がないため、スマホのClaudeアプリから使うには自前のOAuth認可サーバが要る
 - **PIRのタスク台帳とは役割を分ける** — このアプリは日々の実行タスク(買い物・提出物・雑務)、台帳はClaudeとの運用に関わる事項(確認待ち・手続き)。同期はしない。この分担はMCPツールの説明文にも書いてある
-- **初回リリースは最小構成** — 追加・一覧・完了・削除と期限だけ
+- **初回リリースは最小構成** — 追加・一覧・完了・削除と期限だけ(タグは2026/9/3に追加)
 
 ## 構成
 
@@ -49,6 +49,7 @@
 | `src/authorize.js` | OAuthの同意画面 |
 | `src/mcp.js` | MCPツール5つの定義 |
 | `src/http.js` | 共通ヘルパ |
+| `schema.sql` / `migrations/` | 初期スキーマと追加分 |
 | `public/` | PWA一式(HTML / CSS / JS / manifest / Service Worker) |
 | `tools/make-icons.mjs` | アイコンPNG生成(Node標準の zlib のみ) |
 | `tools/oauth-smoke.mjs` | OAuth登録〜ツール呼び出しの通し確認 |
@@ -69,6 +70,7 @@
 npm install
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"   # .dev.vars の値を作る
 npx wrangler d1 execute todo --local --file=schema.sql
+npx wrangler d1 execute todo --local --file=migrations/002_tags.sql
 npx wrangler dev
 ```
 
@@ -90,8 +92,9 @@ npx wrangler dev
 - スマホのホーム画面から起動して操作できることを実機で確認済み
 - Claudeのカスタムコネクタとして登録し、`list_tasks` と `add_task` の往復を確認済み
 - GUIは2026/9/3に作り直した(無彩色のダーク基調、期限による区分け、下部固定の入力欄)
+- タグを2026/9/3に実装した。行に表示し、ヘッダのチップで絞り込む(複数選択はOR)。入力欄は既存タグを候補に出す
 
 ### 残っていること
 
 1. **Service Workerの動作確認** — オフライン時に画面の骨組みが出るか。開発用の埋め込みブラウザでは登録が拒否され未検証
-2. **初回で見送った機能の候補** — 期限のプッシュ通知(Web Push + Cron Trigger)、繰り返しタスク、タグ・分類。使ってみて必要になったら足す
+2. **初回で見送った機能の候補** — 期限のプッシュ通知(Web Push + Cron Trigger)、繰り返しタスク。使ってみて必要になったら足す

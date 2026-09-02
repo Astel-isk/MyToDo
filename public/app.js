@@ -6,6 +6,8 @@ const app = $("app");
 const listRoot = $("list");
 
 let tasks = [];
+let tagCatalog = [];
+let activeTags = new Set();
 let showDone = false;
 
 /** APIを叩く。未認証ならログイン画面へ戻す */
@@ -112,12 +114,24 @@ function row(task) {
   title.textContent = task.title;
   body.append(title);
 
+  if (task.tags.length > 0) {
+    const tags = document.createElement("div");
+    tags.className = "tags";
+    for (const name of task.tags) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = name;
+      tags.append(tag);
+    }
+    body.append(tags);
+  }
+
   const detail = [dueLabel(task), task.note].filter(Boolean).join(" ・ ");
   if (detail) {
     const note = document.createElement("span");
     note.className = "note";
     note.textContent = detail;
-    body.append(note);
+    body.insertBefore(note, body.querySelector(".tags"));
   }
 
   const remove = document.createElement("button");
@@ -134,9 +148,62 @@ function row(task) {
 // --- 操作 -------------------------------------------------------------------
 
 async function load() {
-  const { tasks: fetched } = await api(`/tasks?status=${showDone ? "all" : "open"}`);
+  const query = new URLSearchParams({ status: showDone ? "all" : "open" });
+  for (const name of activeTags) query.append("tag", name);
+
+  const [{ tasks: fetched }, { tags }] = await Promise.all([
+    api(`/tasks?${query}`),
+    api("/tags"),
+  ]);
   tasks = fetched;
+  tagCatalog = tags;
+
+  // 選んでいたタグが使われなくなったら、絞り込みからも外す
+  const known = new Set(tags.map((t) => t.name));
+  for (const name of activeTags) if (!known.has(name)) activeTags.delete(name);
+
+  renderFilters();
+  renderTagOptions();
   render();
+}
+
+/** 絞り込みのチップ。選択は複数可で、いずれかに一致するものを出す */
+function renderFilters() {
+  const filters = $("filters");
+  filters.hidden = tagCatalog.length === 0;
+  $("clear-filter").hidden = activeTags.size === 0;
+
+  const chips = tagCatalog.map((tag) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    const active = activeTags.has(tag.name);
+    chip.setAttribute("aria-pressed", String(active));
+    chip.textContent = tag.name;
+
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = showDone ? tag.count : tag.open_count;
+    chip.append(count);
+
+    chip.addEventListener("click", async () => {
+      if (active) activeTags.delete(tag.name);
+      else activeTags.add(tag.name);
+      await load();
+    });
+    return chip;
+  });
+  $("filter-tags").replaceChildren(...chips);
+}
+
+/** 入力欄の候補。表記ゆれで同じタグが増えるのを防ぐ */
+function renderTagOptions() {
+  const options = tagCatalog.map((tag) => {
+    const option = document.createElement("option");
+    option.value = tag.name;
+    return option;
+  });
+  $("tag-options").replaceChildren(...options);
 }
 
 /** 一覧から消える操作は、消えることを見せてから作り直す */
@@ -199,10 +266,32 @@ $("add-form").addEventListener("submit", async (event) => {
   const title = $("title").value.trim();
   if (!title) return;
   const due = $("due").value || null;
+  const tags = $("tags").value.split(/[\s,、]+/).filter(Boolean);
   $("title").value = "";
   $("due").value = "";
-  await api("/tasks", { method: "POST", body: JSON.stringify({ title, due }) });
+  $("tags").value = "";
+  $("add-form").classList.remove("expanded");
+  await api("/tasks", { method: "POST", body: JSON.stringify({ title, due, tags }) });
   await load();
+});
+
+$("clear-filter").addEventListener("click", async () => {
+  activeTags.clear();
+  await load();
+});
+
+// やることを書き始めたときだけ、タグと期限の欄を出す
+const composer = $("add-form");
+const expand = () => composer.classList.add("expanded");
+$("title").addEventListener("focus", expand);
+$("title").addEventListener("input", expand);
+composer.addEventListener("focusout", () => {
+  // 欄のあいだを移動しただけなら畳まない
+  setTimeout(() => {
+    if (composer.contains(document.activeElement)) return;
+    if ($("title").value || $("tags").value || $("due").value) return;
+    composer.classList.remove("expanded");
+  }, 0);
 });
 
 $("toggle-done").addEventListener("click", async () => {

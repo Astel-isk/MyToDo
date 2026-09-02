@@ -33,11 +33,18 @@
     <!-- ログイン済み -->
     <div id="app" hidden>
       <header>
-        <h1>ToDo</h1>
-        <nav>
-          <button id="toggle-done" type="button" class="ghost" aria-pressed="false">完了分</button>
-          <button id="logout" type="button" class="ghost">ログアウト</button>
-        </nav>
+        <div class="header-row">
+          <h1>ToDo</h1>
+          <nav>
+            <button id="toggle-done" type="button" class="ghost" aria-pressed="false">完了分</button>
+            <button id="logout" type="button" class="ghost">ログアウト</button>
+          </nav>
+        </div>
+
+        <div id="filters" hidden>
+          <button id="clear-filter" type="button" class="chip chip-clear" hidden>絞り込みを解除</button>
+          <div id="filter-tags"></div>
+        </div>
       </header>
 
       <main id="list" aria-live="polite"></main>
@@ -56,9 +63,20 @@
           enterkeyhint="done"
           required
         />
-        <div class="composer-row">
-          <input id="due" type="date" aria-label="期限" />
-          <button type="submit">追加</button>
+        <div class="composer-extra">
+          <input
+            id="tags"
+            type="text"
+            placeholder="タグ(空白区切り)"
+            list="tag-options"
+            autocomplete="off"
+            enterkeyhint="done"
+          />
+          <datalist id="tag-options"></datalist>
+          <div class="composer-row">
+            <input id="due" type="date" aria-label="期限" />
+            <button type="submit">追加</button>
+          </div>
         </div>
       </form>
     </div>

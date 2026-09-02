@@ -3,7 +3,7 @@
  * オフラインでの編集は入れていない(同期の仕組みが要るため)。
  */
 
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL = ["/", "/style.css", "/app.js", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
