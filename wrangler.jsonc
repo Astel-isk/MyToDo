@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "todo",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-02",
+  "assets": { "directory": "./public" },
+  "observability": { "enabled": true },
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "744b365434e74420a4551b67354ee437"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "todo",
+      "database_id": "8baccd43-e7e0-4674-94b7-8b876bce991b"
+    }
+  ]
+}

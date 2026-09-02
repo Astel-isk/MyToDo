@@ -1,0 +1,16 @@
+{
+  "name": "todo",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.128.0"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^0.10.3",
+    "agents": "^0.22.0",
+    "zod": "^4.5.4"
+  }
+}

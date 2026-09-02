@@ -1,0 +1,190 @@
+:root {
+  --bg: #f6f7f6;
+  --surface: #ffffff;
+  --text: #16211d;
+  --muted: #6b7a75;
+  --line: #dfe4e2;
+  --accent: #1f6f5c;
+  --danger: #b3261e;
+  --tap: 48px; /* 片手で押せる最小の大きさ */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101512;
+    --surface: #1a221e;
+    --text: #e8efec;
+    --muted: #93a29c;
+    --line: #2b352f;
+    --accent: #4fbfa2;
+    --danger: #f2b8b5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* id指定の display が UA の [hidden] に勝ってしまうため明示する */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  padding: max(16px, env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin: 0;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+input,
+button {
+  font: inherit;
+  min-height: var(--tap);
+  border-radius: 10px;
+}
+
+input {
+  width: 100%;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  padding: 0 18px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.link {
+  min-height: var(--tap);
+  padding: 0 4px;
+  background: none;
+  color: var(--muted);
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row input {
+  flex: 1;
+}
+
+.row button {
+  flex: 0 0 auto;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  min-height: var(--tap);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+li.done .title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* チェックボックスは指で押せる大きさにする */
+li input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.due {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.due.overdue {
+  color: var(--danger);
+}
+
+.delete {
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 1.25rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+#login {
+  margin-top: 12vh;
+  display: grid;
+  gap: 16px;
+}
