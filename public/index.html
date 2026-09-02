@@ -64,15 +64,22 @@
           required
         />
         <div class="composer-extra">
+          <div id="tag-picker"></div>
           <input
-            id="tags"
+            id="new-tag-name"
             type="text"
-            placeholder="タグ(空白区切り)"
-            list="tag-options"
+            placeholder="新しいタグの名前"
             autocomplete="off"
             enterkeyhint="done"
+            maxlength="20"
+            hidden
           />
-          <datalist id="tag-options"></datalist>
+
+          <div id="new-tag-confirm" hidden>
+            <span id="new-tag-message"></span>
+            <button id="new-tag-yes" type="button">作る</button>
+            <button id="new-tag-no" type="button" class="ghost">やめる</button>
+          </div>
           <div class="composer-row">
             <input id="due" type="date" aria-label="期限" />
             <button type="submit">追加</button>

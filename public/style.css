@@ -436,3 +436,50 @@ li.done .tag {
 #add-form.expanded .composer-extra {
   display: grid;
 }
+
+/* 入力欄のタグ選択。既存のタグを押して付ける形にし、
+   打ち間違いや言い換えで似たタグが増えないようにする */
+#tag-picker {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -12px;
+  padding: 0 12px 2px;
+}
+
+#tag-picker::-webkit-scrollbar {
+  display: none;
+}
+
+#tag-picker:empty {
+  display: none;
+}
+
+/* 新規作成は、押して初めて名前を書く場所が出る。既定の動線にしない */
+.chip-new {
+  border-style: dashed;
+}
+
+/* 新しいタグを作る前の確認。画面を塞ぐダイアログにせず、その場に出す */
+#new-tag-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+#new-tag-message {
+  flex: 1 1 100%;
+}
+
+#new-tag-confirm button {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.9rem;
+}

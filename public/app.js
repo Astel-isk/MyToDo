@@ -8,6 +8,8 @@ const listRoot = $("list");
 let tasks = [];
 let tagCatalog = [];
 let activeTags = new Set();
+let selectedTags = new Set();
+let pendingNewTags = new Set();
 let showDone = false;
 
 /** APIを叩く。未認証ならログイン画面へ戻す */
@@ -163,7 +165,7 @@ async function load() {
   for (const name of activeTags) if (!known.has(name)) activeTags.delete(name);
 
   renderFilters();
-  renderTagOptions();
+  renderTagPicker();
   render();
 }
 
@@ -196,14 +198,78 @@ function renderFilters() {
   $("filter-tags").replaceChildren(...chips);
 }
 
-/** 入力欄の候補。表記ゆれで同じタグが増えるのを防ぐ */
-function renderTagOptions() {
-  const options = tagCatalog.map((tag) => {
-    const option = document.createElement("option");
-    option.value = tag.name;
-    return option;
+/**
+ * 入力欄のタグ選択。既存のタグを押して付ける形にし、新規作成は「＋ 新規」から
+ * 確認を挟んで行う。自由入力にすると打ち間違いや言い換えで似たタグが増えるため。
+ */
+function renderTagPicker() {
+  const names = [...new Set([...tagCatalog.map((t) => t.name), ...pendingNewTags])];
+
+  const chips = names.map((name) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.textContent = name;
+    chip.setAttribute("aria-pressed", String(selectedTags.has(name)));
+    chip.addEventListener("click", () => {
+      if (selectedTags.has(name)) selectedTags.delete(name);
+      else selectedTags.add(name);
+      renderTagPicker();
+    });
+    return chip;
   });
-  $("tag-options").replaceChildren(...options);
+
+  const create = document.createElement("button");
+  create.type = "button";
+  create.className = "chip chip-new";
+  create.textContent = "＋ 新規";
+  create.addEventListener("click", () => {
+    closeCreatePrompt();
+    const field = $("new-tag-name");
+    field.hidden = false;
+    field.focus();
+  });
+  chips.push(create);
+
+  $("tag-picker").replaceChildren(...chips);
+}
+
+/** 新規作成。既存と同じ名前ならそれを選ぶだけにし、本当に新しいときだけ確認する */
+function proposeNewTag() {
+  const field = $("new-tag-name");
+  const name = field.value.trim().replace(/ +/g, " ").slice(0, 20);
+  field.value = "";
+  field.hidden = true;
+  if (!name) return;
+
+  const known = tagCatalog.some((tag) => tag.name === name) || pendingNewTags.has(name);
+  if (known) {
+    selectedTags.add(name);
+    renderTagPicker();
+    return;
+  }
+  askToCreate(name);
+}
+
+/** 画面を塞ぐダイアログにせず、入力欄のすぐ上に確認を出す */
+function askToCreate(name) {
+  const existing = tagCatalog.map((tag) => tag.name);
+  $("new-tag-message").textContent = existing.length
+    ? `「${name}」は新しいタグです。今あるのは ${existing.join("、")} です。`
+    : `「${name}」を最初のタグとして作ります。`;
+  $("new-tag-confirm").hidden = false;
+  $("new-tag-yes").onclick = () => {
+    pendingNewTags.add(name);
+    selectedTags.add(name);
+    closeCreatePrompt();
+    renderTagPicker();
+  };
+  $("new-tag-no").onclick = closeCreatePrompt;
+}
+
+function closeCreatePrompt() {
+  $("new-tag-confirm").hidden = true;
+  $("new-tag-message").textContent = "";
 }
 
 /** 一覧から消える操作は、消えることを見せてから作り直す */
@@ -266,12 +332,20 @@ $("add-form").addEventListener("submit", async (event) => {
   const title = $("title").value.trim();
   if (!title) return;
   const due = $("due").value || null;
-  const tags = $("tags").value.split(/[\s,、]+/).filter(Boolean);
+  const tags = [...selectedTags];
+  const allowNewTags = [...pendingNewTags].filter((name) => selectedTags.has(name));
+
   $("title").value = "";
   $("due").value = "";
-  $("tags").value = "";
+  selectedTags.clear();
+  pendingNewTags.clear();
+  closeCreatePrompt();
   $("add-form").classList.remove("expanded");
-  await api("/tasks", { method: "POST", body: JSON.stringify({ title, due, tags }) });
+
+  await api("/tasks", {
+    method: "POST",
+    body: JSON.stringify({ title, due, tags, allowNewTags }),
+  });
   await load();
 });
 
@@ -289,10 +363,18 @@ composer.addEventListener("focusout", () => {
   // 欄のあいだを移動しただけなら畳まない
   setTimeout(() => {
     if (composer.contains(document.activeElement)) return;
-    if ($("title").value || $("tags").value || $("due").value) return;
+    if ($("title").value || $("due").value || selectedTags.size > 0) return;
     composer.classList.remove("expanded");
   }, 0);
 });
+
+$("new-tag-name").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault(); // フォーム全体の送信にしない
+  proposeNewTag();
+});
+
+$("new-tag-name").addEventListener("blur", proposeNewTag);
 
 $("toggle-done").addEventListener("click", async () => {
   showDone = !showDone;

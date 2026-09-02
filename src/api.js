@@ -33,6 +33,22 @@ export function normalizeTags(input) {
 
 // --- タグ -------------------------------------------------------------------
 
+/**
+ * まだ存在しない名前を返す。
+ * タグは打ち間違いや言い換えで際限なく増えるため、作成は明示的に許した名前だけに限る。
+ */
+export async function findUnknownTags(env, names) {
+  if (names.length === 0) return [];
+  const placeholders = names.map(() => "?").join(", ");
+  const { results } = await env.DB.prepare(
+    `SELECT name FROM tags WHERE name IN (${placeholders})`
+  )
+    .bind(...names)
+    .all();
+  const known = new Set(results.map((row) => row.name));
+  return names.filter((name) => !known.has(name));
+}
+
 /** タスクに付けるタグを、渡された集合そのものに置き換える */
 export async function setTags(env, taskId, names) {
   const statements = [env.DB.prepare("DELETE FROM task_tags WHERE task_id = ?").bind(taskId)];
@@ -186,7 +202,11 @@ export async function handleCreate(request, env) {
   const fields = pickFields(body);
   if (!fields.title) return error("title は必須です", 400);
 
-  return json({ task: await createTask(env, fields, normalizeTags(body.tags) || []) }, 201);
+  const tags = normalizeTags(body.tags) || [];
+  const rejected = await rejectUnknownTags(env, tags, body.allowNewTags);
+  if (rejected) return rejected;
+
+  return json({ task: await createTask(env, fields, tags) }, 201);
 }
 
 export async function handleUpdate(request, env, id) {
@@ -198,8 +218,30 @@ export async function handleUpdate(request, env, id) {
   if ("title" in fields && !fields.title) return error("title は空にできません", 400);
   if (Object.keys(fields).length === 0 && !tags) return error("更新する項目がありません", 400);
 
+  if (tags) {
+    const rejected = await rejectUnknownTags(env, tags, body.allowNewTags);
+    if (rejected) return rejected;
+  }
+
   const task = await updateTask(env, id, fields, tags);
   return task ? json({ task }) : error("該当するタスクがありません", 404);
+}
+
+/** 作成を許していない名前が混ざっていれば、使えるタグを添えて返す */
+async function rejectUnknownTags(env, tags, allowNewTags) {
+  const allowed = new Set(normalizeTags(allowNewTags) || []);
+  const unknown = (await findUnknownTags(env, tags)).filter((name) => !allowed.has(name));
+  if (unknown.length === 0) return null;
+
+  const available = (await listTags(env)).map((tag) => tag.name);
+  return json(
+    {
+      error: `存在しないタグです: ${unknown.join(", ")}`,
+      unknownTags: unknown,
+      availableTags: available,
+    },
+    400
+  );
 }
 
 export async function handleDelete(env, id) {

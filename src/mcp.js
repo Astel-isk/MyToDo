@@ -5,7 +5,15 @@
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
-import { listTasks, listTags, createTask, updateTask, deleteTask, normalizeTags } from "./api.js";
+import {
+  listTasks,
+  listTags,
+  createTask,
+  updateTask,
+  deleteTask,
+  normalizeTags,
+  findUnknownTags,
+} from "./api.js";
 
 /** このアプリが何を置く場所かを、ツールの説明に一貫して書くための前置き */
 const SCOPE_NOTE =
@@ -36,7 +44,24 @@ const DUE = z
 
 const TAGS = z
   .array(z.string().min(1).max(20))
-  .describe("タグ。学業・バイト・生活など、後で絞り込むための短い名前。既存のタグ名は list_tags で確認できる");
+  .describe(
+    "タグ。すでに存在するものだけを指定できる。名前は list_tags で確認する。新しいタグを作れるのは本人がアプリの画面で操作したときだけなので、思いついた分類を勝手に足さない"
+  );
+
+/** 存在しないタグが混ざっていたら、使える名前を添えて断る */
+async function checkTags(env, names) {
+  const unknown = await findUnknownTags(env, names);
+  if (unknown.length === 0) return null;
+
+  const available = (await listTags(env)).map((tag) => tag.name);
+  return text(
+    [
+      `存在しないタグは付けられない: ${unknown.join(", ")}`,
+      `使えるタグ: ${available.length ? available.join(", ") : "(まだない)"}`,
+      "新しいタグは本人がアプリの画面から作る。近い意味の既存タグを使うか、タグなしで追加する",
+    ].join("\n")
+  );
+}
 
 export function createServer(env) {
   const server = new McpServer({ name: "todo", version: "1.0.0" });
@@ -73,10 +98,14 @@ export function createServer(env) {
       },
     },
     async ({ title, due, note, tags }) => {
+      const names = normalizeTags(tags) || [];
+      const rejected = await checkTags(env, names);
+      if (rejected) return rejected;
+
       const task = await createTask(
         env,
         { title: title.trim(), due: due ?? null, note: note ?? null },
-        normalizeTags(tags) || []
+        names
       );
       return text(`追加した: ${line(task)}`);
     }
@@ -116,6 +145,10 @@ export function createServer(env) {
       const nextTags = normalizeTags(tags);
       if (Object.keys(fields).length === 0 && !nextTags) {
         return text("変更する項目が指定されていない");
+      }
+      if (nextTags) {
+        const rejected = await checkTags(env, nextTags);
+        if (rejected) return rejected;
       }
 
       const task = await updateTask(env, id, fields, nextTags);
