@@ -9,6 +9,10 @@
  *   POST   /api/tasks                        追加  {title, note?, due?}
  *   PATCH  /api/tasks/:id                    更新  {title?, note?, due?, done?}
  *   DELETE /api/tasks/:id                    削除
+ *   GET    /api/push/key                     購読に使うVAPIDの公開鍵
+ *   POST   /api/push/subscribe               通知の宛先を登録
+ *   DELETE /api/push/subscribe               通知の宛先を削除
+ *   POST   /api/push/test                    通知を1通送る(動作確認用)
  *   GET    /authorize                        OAuthの同意画面
  *
  * 静的ファイル(PWA本体)はWorkerに来る前にアセットとして返る。
@@ -18,6 +22,7 @@ import { error, json } from "./http.js";
 import { authenticate, handleLogin, handleLogout } from "./auth.js";
 import { handleList, handleTags, handleCreate, handleUpdate, handleDelete } from "./api.js";
 import { handleAuthorize } from "./authorize.js";
+import { handleKey, handleSubscribe, handleUnsubscribe, handleTest } from "./push.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -44,6 +49,20 @@ export default {
 
     if (pathname === "/api/tags") {
       return request.method === "GET" ? handleTags(env) : error("Method Not Allowed", 405);
+    }
+
+    if (pathname === "/api/push/key") {
+      return request.method === "GET" ? handleKey(env) : error("Method Not Allowed", 405);
+    }
+
+    if (pathname === "/api/push/subscribe") {
+      if (request.method === "POST") return handleSubscribe(request, env);
+      if (request.method === "DELETE") return handleUnsubscribe(request, env);
+      return error("Method Not Allowed", 405);
+    }
+
+    if (pathname === "/api/push/test") {
+      return request.method === "POST" ? handleTest(env) : error("Method Not Allowed", 405);
     }
 
     if (pathname === "/api/tasks") {

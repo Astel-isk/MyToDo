@@ -112,6 +112,11 @@ button.ghost[aria-pressed="true"] {
   color: var(--accent);
 }
 
+/* ブラウザ側で通知を拒否されている場合。押せないことだけを示す */
+button.ghost[disabled] {
+  opacity: 0.4;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

@@ -5,6 +5,13 @@
   "compatibility_date": "2026-09-02",
   "assets": { "directory": "./public" },
   "observability": { "enabled": true },
+  // 毎日 23:00 UTC = 翌 8:00 JST。期限の要約を1通送る
+  "triggers": { "crons": ["0 23 * * *"] },
+  "vars": {
+    // VAPIDの公開鍵。ブラウザに配るものなので秘密ではない(対の秘密鍵はシークレット)
+    "VAPID_PUBLIC_KEY": "BG8zfkf4GTd7UjAdAoOnnAplWPMS5Illbl7qi0u5V1HFbtjQgi3O4eAAQGzFomzhZez3WE3_k1Gp7hqKEbbGWfo",
+    "VAPID_SUBJECT": "https://todo.astelisk.workers.dev"
+  },
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",

@@ -30,6 +30,17 @@ curl -s "${auth[@]}" "$BASE/api/tasks"
 say "削除"
 curl -s "${auth[@]}" -X DELETE "$BASE/api/tasks/$id"
 
+say "通知の公開鍵"
+curl -s "${auth[@]}" "$BASE/api/push/key"
+
+say "通知の宛先を登録して消す"
+curl -s "${auth[@]}" -X POST "$BASE/api/push/subscribe" -d '{"endpoint":"https://example.invalid/smoke"}'
+curl -s "${auth[@]}" -X DELETE "$BASE/api/push/subscribe" -d '{"endpoint":"https://example.invalid/smoke"}'
+
+say "不正なendpoint → 400 のはず"
+curl -s -o /dev/null -w '%{http_code}
+' "${auth[@]}" -X POST "$BASE/api/push/subscribe" -d '{"endpoint":"ftp://x"}'
+
 say "存在しないidを削除 → 404 のはず"
 curl -s -o /dev/null -w '%{http_code}\n' "${auth[@]}" -X DELETE "$BASE/api/tasks/999999"
 

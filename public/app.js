@@ -386,9 +386,79 @@ $("logout").addEventListener("click", async () => {
   showLogin();
 });
 
+// --- 通知 -------------------------------------------------------------------
+
+/**
+ * 毎朝8時の要約通知の入り切り。押した時点の状態から素直に反転させる。
+ * 許可はブラウザの操作を伴うため、画面のボタンからしか要求できない。
+ */
+
+const pushSupported =
+  "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+
+let registration = null;
+
+const currentSubscription = () =>
+  registration ? registration.pushManager.getSubscription() : Promise.resolve(null);
+
+/** VAPIDの公開鍵は base64url の文字列で届く。subscribe はバイト列を要求する */
+function decodeKey(value) {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function refreshNotifyButton() {
+  const button = $("notify");
+  const denied = Notification.permission === "denied";
+  const on = Notification.permission === "granted" && Boolean(await currentSubscription());
+
+  button.setAttribute("aria-pressed", String(on));
+  button.disabled = denied;
+  button.title = denied
+    ? "ブラウザの設定で通知が拒否されています"
+    : on
+      ? "毎朝8時に期限の要約を通知します"
+      : "毎朝8時に期限の要約を受け取る";
+}
+
+async function toggleNotify() {
+  const existing = await currentSubscription();
+  if (existing) {
+    await existing.unsubscribe();
+    await api("/push/subscribe", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint: existing.endpoint }),
+    });
+    return refreshNotifyButton();
+  }
+
+  if ((await Notification.requestPermission()) !== "granted") return refreshNotifyButton();
+
+  const { publicKey } = await api("/push/key");
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: decodeKey(publicKey),
+  });
+  await api("/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
+  });
+  await refreshNotifyButton();
+}
+
+async function initPush() {
+  if (!pushSupported) return;
+  registration = await navigator.serviceWorker.ready; // 登録できない環境ではここで止まる
+  $("notify").hidden = false;
+  await refreshNotifyButton();
+  $("notify").addEventListener("click", () => toggleNotify().catch(refreshNotifyButton));
+}
+
 // クッキーが生きていればそのまま一覧へ、切れていればログイン画面へ
 load().then(showApp).catch(() => {});
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
+  initPush().catch(() => {});
 }
