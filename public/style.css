@@ -93,13 +93,22 @@ button {
 }
 
 button.ghost {
-  padding: 0 10px;
+  padding: 0 12px;
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: none;
   color: var(--muted);
   font-weight: 400;
+  font-size: 0.9rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
+/* 完了分を出しているあいだは、文字色だけでなく面と枠でも示す。
+   目立たせすぎず、状態が続いていることが見て取れる程度にする */
 button.ghost[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--line);
   color: var(--accent);
 }
 
