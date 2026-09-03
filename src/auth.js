@@ -7,6 +7,11 @@
  */
 
 import { error, json, readJson, constantTimeEquals } from "./http.js";
+import {
+  allowPasswordAttempt,
+  recordPasswordFailure,
+  clearPasswordFailures,
+} from "./ratelimit.js";
 
 const COOKIE_NAME = "session";
 const SESSION_DAYS = 90;
@@ -77,15 +82,22 @@ export async function authenticate(request, env, ctx) {
 
 /** パスワードを確かめてセッションのクッキーを配る */
 export async function handleLogin(request, env) {
+  if (!(await allowPasswordAttempt(env, request))) {
+    return error("失敗が続いたため、しばらく受け付けません", 429);
+  }
+
   const body = await readJson(request);
   if (!body) return error("リクエスト本文がJSONではありません", 400);
   if (!env.TODO_PASSWORD || !env.COOKIE_SECRET) return error("サーバ側の設定が未完了です", 500);
 
   if (typeof body.password !== "string" || !constantTimeEquals(body.password, env.TODO_PASSWORD)) {
-    // 総当たりの速度を落とす。利用者が1人のため、遅延による実害はない
+    await recordPasswordFailure(env, request);
+    // 1本ずつ遅らせる。これ自体は総当たりを止めない(ratelimit.js の説明を参照)
     await new Promise((resolve) => setTimeout(resolve, 800));
     return error("パスワードが違います", 401);
   }
+
+  await clearPasswordFailures(env, request);
 
   const cookie = [
     `${COOKIE_NAME}=${await issueSession(env)}`,

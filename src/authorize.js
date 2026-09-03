@@ -4,6 +4,7 @@
  */
 
 import { constantTimeEquals } from "./http.js";
+import { allowPasswordAttempt, recordPasswordFailure, clearPasswordFailures } from "./ratelimit.js";
 
 const escape = (value) =>
   String(value).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -49,11 +50,20 @@ export async function handleAuthorize(request, env) {
   const form = await request.formData();
   const info = JSON.parse(form.get("oauth"));
 
+  // ログイン画面と同じパスワードを受けるため、こちらにも同じ制限をかける
+  if (!(await allowPasswordAttempt(env, request))) {
+    const client = await env.OAUTH_PROVIDER.lookupClient(info.clientId);
+    return html(consentPage(info, client, "失敗が続いたため、しばらく受け付けません"), 429);
+  }
+
   if (!env.TODO_PASSWORD || !constantTimeEquals(form.get("password") || "", env.TODO_PASSWORD)) {
+    await recordPasswordFailure(env, request);
     await new Promise((resolve) => setTimeout(resolve, 800));
     const client = await env.OAUTH_PROVIDER.lookupClient(info.clientId);
     return html(consentPage(info, client, "パスワードが違います"), 401);
   }
+
+  await clearPasswordFailures(env, request);
 
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({
     request: info,

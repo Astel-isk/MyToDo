@@ -32,6 +32,7 @@ import {
   handleDelete,
 } from "./api.js";
 import { handleAuthorize } from "./authorize.js";
+import { allowApiRequest } from "./ratelimit.js";
 import { handleKey, handleSubscribe, handleUnsubscribe, handleTest } from "./push.js";
 
 export default {
@@ -50,6 +51,11 @@ export default {
     }
 
     if (!pathname.startsWith("/api/")) return error("Not Found", 404);
+
+    // 1つの発信元が無料枠を使い切らないようにする
+    if (!(await allowApiRequest(env, request))) {
+      return error("リクエストが多すぎます。しばらく待ってください", 429);
+    }
 
     if (!(await authenticate(request, env, ctx))) return error("Unauthorized", 401);
 

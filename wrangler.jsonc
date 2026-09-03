@@ -12,6 +12,21 @@
     "VAPID_PUBLIC_KEY": "BG8zfkf4GTd7UjAdAoOnnAplWPMS5Illbl7qi0u5V1HFbtjQgi3O4eAAQGzFomzhZez3WE3_k1Gp7hqKEbbGWfo",
     "VAPID_SUBJECT": "https://todo.astelisk.workers.dev"
   },
+  // 総当たりの制限。数え方は拠点ごと・おおよそで、period は 10 か 60 しか取れない
+  "ratelimits": [
+    {
+      // パスワードを試す操作(ログイン・OAuthの同意)
+      "name": "AUTH_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 5, "period": 60 }
+    },
+    {
+      // APIの総量。通常の利用は遠く下回る
+      "name": "API_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 120, "period": 60 }
+    }
+  ],
   "kv_namespaces": [
     {
       "binding": "OAUTH_KV",

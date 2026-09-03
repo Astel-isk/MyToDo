@@ -38,6 +38,8 @@
 | Claude(全クライアント) | OAuth 2.1 アクセストークン(PKCE / S256) |
 | スクリプト・疎通確認 | `TODO_TOKEN` の Bearer |
 
+パスワードを受ける経路(ログイン画面とOAuthの同意画面)には試行回数の制限がある。詳細は「総当たりへの備え」。
+
 ### ファイル
 
 | パス | 役割 |
@@ -47,6 +49,7 @@
 | `src/api.js` | タスクのCRUD。RESTとMCPで共有する |
 | `src/auth.js` | 3経路の認証、クッキーの署名と検証 |
 | `src/authorize.js` | OAuthの同意画面 |
+| `src/ratelimit.js` | 試行回数の制限(パスワードとAPIの総量) |
 | `src/mcp.js` | MCPツール6つの定義 |
 | `src/push.js` | プッシュ通知(VAPIDの署名・送信・宛先の管理) |
 | `src/http.js` | 共通ヘルパ |
@@ -62,6 +65,7 @@
 - Worker `todo`(Cron Trigger `0 23 * * *` = 毎日8:00 JST)
 - D1 `todo`(uuid `8baccd43-e7e0-4674-94b7-8b876bce991b`、APAC)
 - KV `todo-oauth`(id `744b365434e74420a4551b67354ee437`、`OAUTH_KV` としてバインド)
+- Rate Limiting binding 2つ(`AUTH_LIMITER` 5回/60秒、`API_LIMITER` 120回/60秒)
 - シークレット4つ: `TODO_TOKEN`(スクリプト用)、`TODO_PASSWORD`(ログイン)、`COOKIE_SECRET`(セッション署名)、`VAPID_PRIVATE_KEY`(通知の署名)
 
 すべて無料枠に収まる。9/16以降に `astelisk.com` を取得したら `todo.astelisk.com` へ付け替えられる。
@@ -74,6 +78,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"  
 npx wrangler d1 execute todo --local --file=schema.sql
 npx wrangler d1 execute todo --local --file=migrations/002_tags.sql
 npx wrangler d1 execute todo --local --file=migrations/003_push.sql
+npx wrangler d1 execute todo --local --file=migrations/004_login_attempts.sql
 npx wrangler dev
 ```
 
@@ -88,6 +93,27 @@ npx wrangler dev
 | PWA | ブラウザで操作。375px幅とダークモードを確認する |
 | 通知の送信 | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+23+*+*+*"` でcronを手で起こす。結果はログに出る |
 | 通知の受信 | 実機で「通知」を入りにしてから `POST /api/push/test`(期限の有無によらず1通送る) |
+
+## 総当たりへの備え
+
+公開リポジトリにするとURLが見つけやすくなるため、パスワードの総当たりに備えている(2026/9/3)。
+
+失敗時に800ミリ秒待たせる処理は**総当たりを止めない**。Workersはリクエストを並列に処理するので、
+1本ずつ遅くしても同時に何本でも投げられる。そこで実際に回数を数える。
+
+| 段 | 仕組み | 実測(本番、2026/9/3) |
+|---|---|---|
+| 1 | CloudflareのRate Limiting binding | 40本同時のうち止まったのは概ね1本。**これだけでは効かない** |
+| 2 | D1に失敗回数を記録し、IPごとに5回で15分断つ | 逐次10回 → 5回目まで401、6回目以降は429。40本同時 → 通ったのは9本、残り31本は429 |
+
+2段目が実際の関門である。D1は書き込み先が1つなので数が正確になる。同時に投げると数え切る前に
+数本が通るが、通ったあとは断たれ続ける。攻撃者が試せるのは15分あたり10回弱に収まる。
+
+- 断っているあいだは数を増やさないので、書き込みは1つのIPにつき最大5回で頭打ちになる
+- ログインに成功すると記録を消す
+- IPを変えられると1段目も2段目も回避できる。ここを塞ぐには全体の上限が要るが、それは本人を
+  締め出す手段にもなるため置いていない。独自ドメインへ移したらWAFのRate Limiting Rule
+  (無料プランでも1つ使える)を前段に置ける。`workers.dev` のままでは設定できない
 
 ## プッシュ通知
 
