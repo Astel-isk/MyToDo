@@ -4,10 +4,10 @@
   "main": "src/index.js",
   "compatibility_date": "2026-09-02",
   "assets": { "directory": "./public" },
-  // 独自ドメイン(2026/9/9)。routes を書くと workers.dev は既定で切れるため、
-  // 移行が済むまでは workers_dev を明示して残す
+  // 独自ドメイン(2026/9/9)。workers.dev の旧URLは移行完了に伴い閉じた(2026/9/9)。
+  // routes を書けば既定で切れるが、意図を残すため明示しておく
   "routes": [{ "pattern": "todo.astelisk.com", "custom_domain": true }],
-  "workers_dev": true,
+  "workers_dev": false,
   "observability": { "enabled": true },
   // 毎日 23:00 UTC = 翌 8:00 JST。期限の要約を1通送る
   "triggers": { "crons": ["0 23 * * *"] },

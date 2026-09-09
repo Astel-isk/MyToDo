@@ -4,7 +4,7 @@
 
 公開URL: https://todo.astelisk.com
 
-旧URL `https://todo.astelisk.workers.dev` も当面は生きている。スマホのPWAとClaudeのコネクタを新URLへ移し終えたら、`wrangler.jsonc` の `workers_dev` を `false` にして閉じる。
+旧URL `https://todo.astelisk.workers.dev` は2026/9/9に閉じた(PWA・コネクタ・通知の宛先を移設後)。
 
 ## なぜ作ったか
 
@@ -73,8 +73,12 @@
 すべて無料枠に収まる。
 
 `astelisk.com` は2026/9/9に取得し、同日 `todo.astelisk.com` をCustom Domainとして割り当てた。
-`routes` を書くとworkers.devの経路は既定で切れる。移行中は両方を残すため `"workers_dev": true` を明示している
-(これを書かずにデプロイし、新ドメインのDNSが行き渡る前に旧URLが404になった。2026/9/9)。
+`routes` を書くとworkers.devの経路は既定で切れる。移行中だけ `"workers_dev": true` で両方を生かし、
+移設が済んだ時点で `false` に戻した(同日)。最初にこれを知らずデプロイし、新ドメインのDNSが
+行き渡る前に旧URLが404になって1分ほど落ちた。
+
+移行に伴う後始末: プッシュ通知の宛先はオリジンごとに別物になるため、旧オリジンの購読(2026/9/2登録)を
+`push_subscriptions` から削除した。放置すると毎朝2通届く。
 
 ## 開発
 
