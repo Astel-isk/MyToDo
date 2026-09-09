@@ -2,7 +2,9 @@
 
 自作のToDoアプリ。Cloudflare Workers + D1 + KV の上で動き、**PWA**として使い、同時に**MCPサーバ**としてClaudeのカスタムコネクタから読み書きできる。
 
-公開URL: https://todo.astelisk.workers.dev
+公開URL: https://todo.astelisk.com
+
+旧URL `https://todo.astelisk.workers.dev` も当面は生きている。スマホのPWAとClaudeのコネクタを新URLへ移し終えたら、`wrangler.jsonc` の `workers_dev` を `false` にして閉じる。
 
 ## なぜ作ったか
 
@@ -68,7 +70,11 @@
 - Rate Limiting binding 2つ(`AUTH_LIMITER` 5回/60秒、`API_LIMITER` 120回/60秒)
 - シークレット4つ: `TODO_TOKEN`(スクリプト用)、`TODO_PASSWORD`(ログイン)、`COOKIE_SECRET`(セッション署名)、`VAPID_PRIVATE_KEY`(通知の署名)
 
-すべて無料枠に収まる。9/16以降に `astelisk.com` を取得したら `todo.astelisk.com` へ付け替えられる。
+すべて無料枠に収まる。
+
+`astelisk.com` は2026/9/9に取得し、同日 `todo.astelisk.com` をCustom Domainとして割り当てた。
+`routes` を書くとworkers.devの経路は既定で切れる。移行中は両方を残すため `"workers_dev": true` を明示している
+(これを書かずにデプロイし、新ドメインのDNSが行き渡る前に旧URLが404になった。2026/9/9)。
 
 ## 開発
 
@@ -112,8 +118,9 @@ npx wrangler dev
 - 断っているあいだは数を増やさないので、書き込みは1つのIPにつき最大5回で頭打ちになる
 - ログインに成功すると記録を消す
 - IPを変えられると1段目も2段目も回避できる。ここを塞ぐには全体の上限が要るが、それは本人を
-  締め出す手段にもなるため置いていない。独自ドメインへ移したらWAFのRate Limiting Rule
-  (無料プランでも1つ使える)を前段に置ける。`workers.dev` のままでは設定できない
+  締め出す手段にもなるため置いていない
+- 独自ドメインへ移したので、WAFのRate Limiting Rule(無料プランでも1つ使える)を前段に置けるように
+  なった(2026/9/9)。Workerが動く前に弾けるため、無料枠の消費も防げる。**未設定**
 
 ## プッシュ通知
 
