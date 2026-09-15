@@ -1,4 +1,7 @@
 /*
+ * 見た目は自作アプリ共通のGUI規約に揃えてある(配色・角丸・下部ナビ・シートなど)。
+ * 規約の参照実装はMyMoneyの public/style.css。
+ *
  * 配色の方針
  *  - 既定をダークにする(常用がダークのため、環境の判定に依存させない)
  *  - 背景・面・境界はすべて無彩色。純黒(#000)は使わず #121212 を基準にし、
@@ -8,6 +11,7 @@
  */
 
 :root {
+  color-scheme: dark; /* チェックボックスや日付欄など、ブラウザ標準の部品も配色に合わせる */
   --bg: #121212;
   --surface: #1e1e1e;
   --surface-raised: #262626;
@@ -18,13 +22,19 @@
   --on-accent: #10151d;
   --alert: #ff8a80;
 
-  --tap: 48px;
-  --radius: 12px;
-  --gap: 8px;
+  --tap: 44px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-sheet: 14px;
+
+  --nav-h: 56px;
+  --record-h: 52px;
+  --header-h: 40px; /* 実際の高さは app.js が入れる。区分けの見出しを貼り付ける位置に使う */
 }
 
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --bg: #fafafa;
     --surface: #ffffff;
     --surface-raised: #ffffff;
@@ -57,16 +67,27 @@ body {
   color: var(--text);
   font-family: system-ui, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* --- 共通の部品 ---------------------------------------------------------- */
+h1,
+h2,
+.label-muted,
+.section-heading,
+.group-heading,
+.field-label,
+.nav-btn,
+.empty-title {
+  font-feature-settings: "palt";
+}
+
+/* --- 共通の部品 ------------------------------------------------------------- */
 
 input,
 button {
   font: inherit;
-  border-radius: 10px;
+  border-radius: var(--r-sm);
 }
 
 input {
@@ -86,35 +107,47 @@ button {
   min-height: var(--tap);
   padding: 0 20px;
   border: none;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: 600;
+  background: none;
+  color: inherit;
+  font-weight: 400;
   cursor: pointer;
 }
 
-button.ghost {
-  padding: 0 12px;
-  min-height: 36px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: none;
+.btn-primary {
+  border-radius: var(--r-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.btn-text {
+  flex: 0 0 auto;
+  padding: 0 8px;
   color: var(--muted);
-  font-weight: 400;
-  font-size: 0.9rem;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-/* 完了分を出しているあいだは、文字色だけでなく面と枠でも示す。
-   目立たせすぎず、状態が続いていることが見て取れる程度にする */
-button.ghost[aria-pressed="true"] {
-  background: var(--surface);
-  border-color: var(--line);
+.btn-text.accent {
   color: var(--accent);
+  font-weight: 600;
 }
 
-/* ブラウザ側で通知を拒否されている場合。押せないことだけを示す */
-button.ghost[disabled] {
-  opacity: 0.4;
+.btn-text.alert {
+  color: var(--alert);
+  font-weight: 600;
+}
+
+.link-btn-block,
+.link-btn-alert {
+  display: block;
+  width: 100%;
+  padding: 0 4px;
+  text-align: left;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.link-btn-alert {
+  color: var(--alert);
 }
 
 :focus-visible {
@@ -125,9 +158,25 @@ button.ghost[disabled] {
 .error {
   margin: 0;
   color: var(--alert);
+  font-size: 0.85rem;
 }
 
-/* --- ログイン ------------------------------------------------------------ */
+.empty-hint {
+  margin: 0;
+  padding: 16px 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* 件数(数字 + 件)。単位は数字より一回り小さくする */
+.count-unit {
+  margin-left: 0.1em;
+  font-size: 0.75em;
+  letter-spacing: normal;
+  color: var(--muted);
+}
+
+/* --- ログイン ---------------------------------------------------------------- */
 
 #login {
   display: grid;
@@ -145,6 +194,7 @@ button.ghost[disabled] {
 .login-inner h1 {
   margin: 0;
   font-size: 1.5rem;
+  line-height: 1.15;
   text-align: center;
 }
 
@@ -153,7 +203,7 @@ button.ghost[disabled] {
   gap: 10px;
 }
 
-/* --- 本体のレイアウト ---------------------------------------------------- */
+/* --- 本体のレイアウト --------------------------------------------------------- */
 
 #app {
   display: flex;
@@ -166,356 +216,496 @@ button.ghost[disabled] {
 header {
   position: sticky;
   top: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  z-index: 2;
+  padding: max(10px, env(safe-area-inset-top)) 16px 8px;
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
 }
 
-.header-row {
+#header-date {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.conn-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-}
-
-header h1 {
-  margin: 0 0 0 4px;
-  font-size: 1.15rem;
-  letter-spacing: 0.02em;
-}
-
-nav {
-  display: flex;
+  gap: 12px;
+  padding: 4px 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--alert);
+  font-size: 0.85rem;
 }
 
 main {
   flex: 1;
-  padding: 4px 12px 16px;
+  padding: 4px 16px calc(var(--nav-h) + var(--record-h) + 40px + env(safe-area-inset-bottom));
 }
 
-/* 空のときは高さを取らせず、案内を画面の中央に置く */
-main:empty {
-  flex: 0;
-  padding: 0;
+/* --- セクション(枠なし) ------------------------------------------------------- */
+
+.section {
+  margin-top: 32px;
 }
 
-/* --- 期限による区分け ---------------------------------------------------- */
-
-.group {
-  margin-top: 18px;
+.section:first-child {
+  margin-top: 8px;
 }
 
-.group:first-child {
-  margin-top: 10px;
-}
-
-.group h2 {
-  margin: 0 0 8px 4px;
-  font-size: 0.78rem;
+.section-heading {
+  margin: 0 0 6px;
+  padding-bottom: 6px;
+  font-size: 0.8rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
   color: var(--muted);
-  text-transform: none;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--line);
 }
 
-.group.overdue h2 {
+/* --- やること: 主役(今日までの件数) --------------------------------------------- */
+
+.section-primary {
+  margin: 8px 0 24px;
+}
+
+.label-muted {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.primary-count {
+  margin: 2px 0 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.secondary-line {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.secondary-line.alert {
   color: var(--alert);
 }
 
-ul {
+/* --- 区分けと行(やること・完了で共通) ------------------------------------------ */
+
+.group + .group {
+  margin-top: 16px;
+}
+
+/* 同じ区分けの行が続くあいだ、見出しを固定したヘッダの直下に貼り付ける */
+.group-heading {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 0 6px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.group-heading .group-count {
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.group.overdue .group-heading {
+  color: var(--alert);
+}
+
+.task-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: var(--gap);
 }
 
-li {
+.task-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 6px 6px 12px;
-  min-height: var(--tap);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
+  gap: 4px;
+  min-height: 56px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-/* 完了・削除の直後に、消えることを見せてから作り直す */
-li.leaving {
+.task-row:last-child {
+  border-bottom: none;
+}
+
+.task-row:active {
+  background: var(--surface-raised);
+}
+
+/* 完了・未完了に戻した直後に、消えることを見せてから作り直す */
+.task-row.leaving {
   opacity: 0;
   transform: translateX(12px);
 }
 
-li input[type="checkbox"] {
+/* チェックボックスは小さいので、押せる範囲を44pxの枠で取る */
+.check {
   flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin-left: -10px;
+  cursor: pointer;
+}
+
+.check input {
   width: 22px;
   height: 22px;
   min-height: 0;
   margin: 0;
   padding: 0;
   accent-color: var(--accent);
+  cursor: pointer;
 }
 
-.body {
+.task-main {
   flex: 1;
+  display: grid;
   min-width: 0;
-  padding: 4px 0;
 }
 
-.title {
-  display: block;
+.task-title {
   overflow-wrap: anywhere;
 }
 
-li.done .title {
+.task-row.done .task-title {
   color: var(--muted);
   text-decoration: line-through;
 }
 
-.note {
-  display: block;
+.task-sub {
   font-size: 0.8rem;
   color: var(--muted);
   overflow-wrap: anywhere;
 }
 
-.delete {
+.task-due {
   flex: 0 0 auto;
-  width: 40px;
-  min-height: 40px;
-  padding: 0;
-  background: none;
+  padding-left: 8px;
+  text-align: right;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   color: var(--muted);
-  font-size: 1.2rem;
-  line-height: 1;
 }
 
-/* --- 空のとき ------------------------------------------------------------ */
+.task-due.alert {
+  color: var(--alert);
+}
 
-#empty {
-  flex: 1;
+/* --- 空状態 ----------------------------------------------------------------------- */
+
+.empty-state {
+  margin-top: 24px;
   display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 4px;
-  padding: 40px 24px;
-  text-align: center;
+  gap: 8px;
 }
 
 .empty-title {
   margin: 0;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
-.empty-hint {
+.empty-desc {
   margin: 0;
   color: var(--muted);
   font-size: 0.9rem;
 }
 
-/* --- 入力欄(下に固定) -------------------------------------------------- */
-
-#add-form {
-  position: sticky;
-  bottom: 0;
-  display: grid;
-  gap: var(--gap);
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  background: var(--surface-raised);
-  border-top: 1px solid var(--line);
+.empty-state .btn-primary {
+  margin-top: 8px;
+  width: 100%;
+  height: var(--record-h);
 }
 
-.composer-row {
+/* --- 設定 ---------------------------------------------------------------------- */
+
+.settings-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-row {
   display: flex;
-  gap: var(--gap);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.composer-row input {
-  flex: 1;
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-left {
   min-width: 0;
 }
 
-.composer-row button {
+.settings-name {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.settings-sub {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.settings-logout-section {
+  margin-top: 40px;
+}
+
+/* --- タグのチップ ------------------------------------------------------------------ */
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 絞り込みは数が増えたら横へ流し、縦には伸ばさない */
+.chip-row.chip-row-scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 8px -16px 0;
+  padding: 0 16px 2px;
+}
+
+.chip-row.chip-row-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.chip-row-inner {
+  display: contents;
+}
+
+.chip {
   flex: 0 0 auto;
+  min-height: var(--tap);
+  max-width: 12rem;
+  padding: 0 14px;
+  border: 2px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 選んでいるあいだは枠と文字の太さで示す(色だけに頼らない) */
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.chip .chip-count {
+  margin-left: 6px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.chip-row input[type="date"] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 140px;
+}
+
+/* --- 下部固定: 追加ボタン・ナビゲーション ------------------------------------------ */
+
+#open-add {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
+  z-index: 4;
+  height: var(--record-h);
+  max-width: 608px;
+  margin-inline: auto;
+}
+
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  max-width: 640px;
+  margin-inline: auto;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
+.nav-btn {
+  flex: 1;
+  min-height: var(--nav-h);
+  border-radius: 0;
+  border-top: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.nav-btn[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 700;
+  border-top-color: var(--accent);
+}
+
+/* --- 下から出るシート ------------------------------------------------------------ */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.sheet {
+  width: min(560px, 100%);
+  max-height: 92dvh;
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  background: var(--surface-raised);
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  transform: translateY(100%);
+  transition: transform 200ms ease-out;
+}
+
+.sheet-overlay.open .sheet {
+  transform: translateY(0);
+}
+
+.sheet-handle {
+  width: 40px;
+  height: 4px;
+  margin: 6px auto 0;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.field-group {
+  display: grid;
+  gap: 6px;
+}
+
+.field-label {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* タグを作る前の確認 */
+.confirm {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 0.9rem;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sheet-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sheet-actions .btn-text.alert {
+  margin-right: auto;
+}
+
+.sheet-actions .btn-primary {
+  flex: 1;
+  height: var(--record-h);
+}
+
+/* --- トースト(下部固定のボタンに重ねない) ------------------------------------------ */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + var(--record-h) + 24px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 6px 6px 6px 16px;
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+#toast-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast button {
+  flex: 0 0 auto;
+  padding: 0 14px;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
   }
-}
-
-/* --- タグ ---------------------------------------------------------------- */
-
-/* 絞り込みは適用中も見えている必要があるため、固定されたヘッダの中に置く。
-   数が増えたときは横へ流し、縦には伸ばさない */
-#filters {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -12px;
-  padding: 0 12px 2px;
-}
-
-#filters::-webkit-scrollbar {
-  display: none;
-}
-
-#filter-tags {
-  display: flex;
-  gap: 6px;
-}
-
-.chip {
-  flex: 0 0 auto;
-  min-height: 32px;
-  max-width: 11rem;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 400;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-/* 選んでいるあいだは、面と枠と文字色の3つで示す(色だけに頼らない) */
-.chip[aria-pressed="true"] {
-  background: var(--surface-raised);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.chip .count {
-  margin-left: 4px;
-  opacity: 0.7;
-}
-
-.chip-clear {
-  color: var(--accent);
-  border-style: dashed;
-}
-
-.chip-edit {
-  border-style: dashed;
-}
-
-/* 編集中はチップの意味が「絞り込む」から「消す」に変わるため、見た目も変える */
-#filters.editing .chip {
-  border-color: var(--alert);
-  color: var(--alert);
-}
-
-#filters.editing .chip-edit {
-  background: var(--surface-raised);
-}
-
-.chip .remove-mark {
-  margin-left: 6px;
-  font-weight: 600;
-}
-
-/* 削除の確認は、作成の確認と同じ形にしつつ枠の色で区別する */
-#tag-delete-confirm {
-  margin-top: 8px;
-  border-color: var(--alert);
-}
-
-#tag-delete-yes {
-  background: var(--alert);
-  color: var(--on-accent);
-}
-
-/* 行に出すタグ。押せないので、絞り込みのチップとは形を変える */
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 3px;
-}
-
-.tag {
-  max-width: 9rem;
-  padding: 0 7px;
-  border-radius: 4px;
-  background: var(--surface-raised);
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-li.done .tag {
-  opacity: 0.6;
-}
-
-/* 入力に取りかかるまで、タグと期限の欄は畳んでおく */
-.composer-extra {
-  display: none;
-  gap: var(--gap);
-}
-
-#add-form.expanded .composer-extra {
-  display: grid;
-}
-
-/* 入力欄のタグ選択。既存のタグを押して付ける形にし、
-   打ち間違いや言い換えで似たタグが増えないようにする */
-#tag-picker {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 -12px;
-  padding: 0 12px 2px;
-}
-
-#tag-picker::-webkit-scrollbar {
-  display: none;
-}
-
-#tag-picker:empty {
-  display: none;
-}
-
-/* 新規作成は、押して初めて名前を書く場所が出る。既定の動線にしない */
-.chip-new {
-  border-style: dashed;
-}
-
-/* タグを作る前・消す前の確認。画面を塞ぐダイアログにせず、その場に出す */
-.confirm {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px dashed var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 0.9rem;
-}
-
-#new-tag-message,
-#tag-delete-message {
-  flex: 1 1 100%;
-}
-
-.confirm button {
-  min-height: 40px;
-  padding: 0 16px;
-  font-size: 0.9rem;
 }

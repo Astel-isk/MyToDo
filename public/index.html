@@ -2,7 +2,10 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <meta name="theme-color" content="#121212" />
     <title>ToDo</title>
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -20,11 +23,12 @@
             id="password"
             type="password"
             placeholder="パスワード"
+            aria-label="パスワード"
             autocomplete="current-password"
             enterkeyhint="go"
             required
           />
-          <button type="submit">ログイン</button>
+          <button type="submit" class="btn-primary">ログイン</button>
         </form>
         <p id="login-error" class="error" role="alert" hidden></p>
       </div>
@@ -32,70 +36,143 @@
 
     <!-- ログイン済み -->
     <div id="app" hidden>
-      <header>
-        <div class="header-row">
-          <h1>ToDo</h1>
-          <nav>
-            <button id="toggle-done" type="button" class="ghost" aria-pressed="false">完了分</button>
-            <button id="notify" type="button" class="ghost" aria-pressed="false" hidden>通知</button>
-            <button id="logout" type="button" class="ghost">ログアウト</button>
-          </nav>
-        </div>
+      <header id="header">
+        <p id="header-date"></p>
 
-        <div id="filters" hidden>
-          <button id="clear-filter" type="button" class="chip chip-clear" hidden>絞り込みを解除</button>
-          <div id="filter-tags"></div>
-          <button id="edit-tags" type="button" class="chip chip-edit" aria-pressed="false">
-            編集
-          </button>
-        </div>
-
-        <div id="tag-delete-confirm" class="confirm" hidden>
-          <span id="tag-delete-message"></span>
-          <button id="tag-delete-yes" type="button">削除</button>
-          <button id="tag-delete-no" type="button" class="ghost">やめる</button>
+        <!-- 絞り込みは適用中も見えている必要があるため、固定されたヘッダの中に置く -->
+        <div id="filters" class="chip-row chip-row-scroll" hidden>
+          <button id="clear-filter" type="button" class="btn-text accent" hidden>絞り込みを解除</button>
+          <div id="filter-tags" class="chip-row-inner"></div>
         </div>
       </header>
 
-      <main id="list" aria-live="polite"></main>
-
-      <div id="empty" hidden>
-        <p class="empty-title">タスクはありません</p>
-        <p class="empty-hint">下の欄に入力して追加してください</p>
+      <div id="conn-banner" class="conn-banner" hidden>
+        <span>通信できませんでした</span>
+        <button type="button" id="conn-retry" class="btn-text accent">再読み込み</button>
       </div>
 
-      <form id="add-form">
-        <input
-          id="title"
-          type="text"
-          placeholder="やることを入力"
-          autocomplete="off"
-          enterkeyhint="done"
-          required
-        />
-        <div class="composer-extra">
-          <div id="tag-picker"></div>
-          <input
-            id="new-tag-name"
-            type="text"
-            placeholder="新しいタグの名前"
-            autocomplete="off"
-            enterkeyhint="done"
-            maxlength="20"
-            hidden
-          />
+      <main id="main">
+        <!-- やること -->
+        <section id="view-open" class="view">
+          <section id="open-primary" class="section-primary">
+            <p class="label-muted">今日までにやること</p>
+            <p class="primary-count" id="primary-count">—</p>
+            <p class="secondary-line" id="primary-sub" hidden></p>
+          </section>
 
-          <div id="new-tag-confirm" class="confirm" hidden>
-            <span id="new-tag-message"></span>
-            <button id="new-tag-yes" type="button">作る</button>
-            <button id="new-tag-no" type="button" class="ghost">やめる</button>
+          <div id="open-empty" class="empty-state" hidden>
+            <p class="empty-title">やることはありません</p>
+            <p class="empty-desc">思いついたことを追加しておくと、期限の近い順に並びます</p>
+            <button type="button" id="empty-add" class="btn-primary">やることを追加する</button>
           </div>
-          <div class="composer-row">
-            <input id="due" type="date" aria-label="期限" />
-            <button type="submit">追加</button>
+
+          <div id="filter-empty" class="empty-state" hidden>
+            <p class="empty-title">選んだタグのタスクはありません</p>
+            <p class="empty-desc">絞り込みを解除すると、すべてのタスクが出ます</p>
+            <button type="button" class="btn-primary clear-filter-action">絞り込みを解除する</button>
+          </div>
+
+          <div id="open-groups"></div>
+        </section>
+
+        <!-- 完了 -->
+        <section id="view-done" class="view" hidden>
+          <div id="done-empty" class="empty-state" hidden>
+            <p class="empty-title">完了したタスクはまだありません</p>
+            <p class="empty-desc">やることタブで行のチェックを入れると、ここに完了した日ごとに並びます</p>
+          </div>
+          <div id="done-groups"></div>
+        </section>
+
+        <!-- 設定 -->
+        <section id="view-settings" class="view" hidden>
+          <section class="section">
+            <h2 class="section-heading">通知</h2>
+            <ul class="settings-list">
+              <li class="settings-row static">
+                <div class="settings-left">
+                  <span class="settings-name">期限の通知</span>
+                  <span class="settings-sub" id="notify-state">—</span>
+                </div>
+                <button type="button" id="notify" class="btn-text accent" hidden></button>
+              </li>
+            </ul>
+          </section>
+
+          <section class="section">
+            <h2 class="section-heading">タグ</h2>
+            <ul id="settings-tags" class="settings-list"></ul>
+            <p id="settings-tags-empty" class="empty-hint" hidden>
+              タグはまだありません。やることを追加するときに「＋ 新しいタグ」から作れます
+            </p>
+          </section>
+
+          <section class="section settings-logout-section">
+            <button type="button" id="logout" class="link-btn-alert">ログアウト</button>
+          </section>
+        </section>
+      </main>
+
+      <button id="open-add" type="button" class="btn-primary" hidden>やることを追加</button>
+
+      <nav class="bottom-nav" role="tablist">
+        <button type="button" class="nav-btn" data-view="open" role="tab" aria-selected="true">やること</button>
+        <button type="button" class="nav-btn" data-view="done" role="tab" aria-selected="false">完了</button>
+        <button type="button" class="nav-btn" data-view="settings" role="tab" aria-selected="false">設定</button>
+      </nav>
+    </div>
+
+    <!-- 追加・編集のシート -->
+    <div id="task-overlay" class="sheet-overlay" hidden>
+      <form id="task-sheet" class="sheet" novalidate>
+        <div class="sheet-handle"></div>
+
+        <div class="field-group">
+          <label class="field-label" for="title">やること</label>
+          <input id="title" type="text" autocomplete="off" enterkeyhint="done" maxlength="200" />
+        </div>
+        <p id="task-error" class="error" role="alert" hidden></p>
+
+        <div class="field-group">
+          <p class="field-label">期限</p>
+          <div class="chip-row">
+            <button type="button" class="chip" id="due-today" aria-pressed="false">今日</button>
+            <button type="button" class="chip" id="due-tomorrow" aria-pressed="false">明日</button>
+            <button type="button" class="chip" id="due-none" aria-pressed="true">なし</button>
+            <input id="due" type="date" aria-label="期限の日付を直接指定" />
           </div>
         </div>
+
+        <div class="field-group">
+          <p class="field-label">タグ</p>
+          <!-- 既存のタグを押して付ける。打ち間違いや言い換えで似たタグが増えないようにする -->
+          <div id="tag-picker" class="chip-row"></div>
+          <button type="button" id="new-tag-open" class="link-btn-block">＋ 新しいタグ</button>
+          <div id="new-tag-field" class="field-group" hidden>
+            <label class="field-label" for="new-tag-name">新しいタグの名前</label>
+            <input id="new-tag-name" type="text" autocomplete="off" enterkeyhint="done" maxlength="20" />
+          </div>
+          <!-- 作る前の確認。画面を塞ぐダイアログにせず、その場に出す -->
+          <div id="new-tag-confirm" class="confirm" hidden>
+            <span id="new-tag-message"></span>
+            <div class="confirm-actions">
+              <button id="new-tag-no" type="button" class="btn-text">やめる</button>
+              <button id="new-tag-yes" type="button" class="btn-primary">作る</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="sheet-actions">
+          <button type="button" id="task-delete" class="btn-text alert" hidden>削除</button>
+          <button type="button" id="task-cancel" class="btn-text">やめる</button>
+          <button type="submit" id="task-save" class="btn-primary">追加する</button>
+        </div>
       </form>
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden>
+      <span id="toast-message"></span>
+      <button type="button" id="toast-undo">取り消す</button>
     </div>
 
     <script src="/app.js"></script>
