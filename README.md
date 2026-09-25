@@ -53,7 +53,8 @@
 | `src/authorize.js` | OAuthの同意画面 |
 | `src/ratelimit.js` | 試行回数の制限(パスワードとAPIの総量) |
 | `src/mcp.js` | MCPツール6つの定義 |
-| `src/push.js` | プッシュ通知(VAPIDの署名・送信・宛先の管理) |
+| `src/push.js` | プッシュ通知(VAPIDの署名・送信・宛先の管理、`dueCounts` による期限の集計) |
+| `src/discord.js` | Discordのメンション付き警報(Webhookへの送信) |
 | `src/http.js` | 共通ヘルパ |
 | `schema.sql` / `migrations/` | 初期スキーマと追加分 |
 | `public/` | PWA一式(HTML / CSS / JS / manifest / Service Worker) |
@@ -64,11 +65,12 @@
 
 ### Cloudflare側のリソース
 
-- Worker `todo`(Cron Trigger `0 23 * * *` = 毎日8:00 JST)
+- Worker `todo`(Cron Trigger 2つ: `0 23 * * *` = 毎日8:00 JST〈Web Push〉、`0 9 * * *` = 毎日18:00 JST〈Discordの警報〉)
 - D1 `todo`(uuid `8baccd43-e7e0-4674-94b7-8b876bce991b`、APAC)
 - KV `todo-oauth`(id `744b365434e74420a4551b67354ee437`、`OAUTH_KV` としてバインド)
 - Rate Limiting binding 2つ(`AUTH_LIMITER` 5回/60秒、`API_LIMITER` 120回/60秒)
-- シークレット4つ: `TODO_TOKEN`(スクリプト用)、`TODO_PASSWORD`(ログイン)、`COOKIE_SECRET`(セッション署名)、`VAPID_PRIVATE_KEY`(通知の署名)
+- シークレット6つ: `TODO_TOKEN`(スクリプト用)、`TODO_PASSWORD`(ログイン)、`COOKIE_SECRET`(セッション署名)、
+  `VAPID_PRIVATE_KEY`(通知の署名)、`DISCORD_WEBHOOK_URL`(Discordの警報の送信先)、`DISCORD_USER_ID`(メンション先)
 
 すべて無料枠に収まる。
 
@@ -93,6 +95,12 @@ npx wrangler dev
 ```
 
 `.dev.vars`(gitignore済み)に `TODO_TOKEN` / `TODO_PASSWORD` / `COOKIE_SECRET` / `VAPID_PRIVATE_KEY` を置く。
+Discordの警報(下記)をローカルで試す場合は `DISCORD_WEBHOOK_URL` / `DISCORD_USER_ID` も同様に置く。
+未設定でも他の機能の開発には支障がない(警報だけが送られない)。
+
+```sh
+npm test   # Discordの警報の本文生成・secret未設定時の抑止・fetch失敗時の扱いをnode:testで検証
+```
 
 ### 検証
 
@@ -101,8 +109,10 @@ npx wrangler dev
 | REST API | `./smoke.sh`(本番は `BASE=... TOKEN=... ./smoke.sh`) |
 | OAuthとMCP | `node tools/oauth-smoke.mjs` — 登録→同意→トークン→6ツールの呼び出しまで通す |
 | PWA | ブラウザで操作。375px幅とダークモードを確認する |
-| 通知の送信 | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+23+*+*+*"` でcronを手で起こす。結果はログに出る |
-| 通知の受信 | 実機で「通知」を入りにしてから `POST /api/push/test`(期限の有無によらず1通送る) |
+| 通知の送信(Web Push) | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+23+*+*+*"` でcronを手で起こす。結果はログに出る |
+| 通知の受信(Web Push) | 実機で「通知」を入りにしてから `POST /api/push/test`(期限の有無によらず1通送る) |
+| Discordの警報の送信 | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+9+*+*+*"` でcronを手で起こす。結果はログに出る。実際にDiscordへ送るには `.dev.vars` に本物のWebhook URLとユーザーIDが要る |
+| Discordの警報の組み立て・抑止 | `npm test`(node:test。fetchはモックし、実際の送信は行わない) |
 
 ## 総当たりへの備え
 
@@ -153,6 +163,33 @@ Cron Trigger (0 23 * * *)
 - 鍵は `tools/make-vapid.mjs` で作る。公開鍵は `wrangler.jsonc` の vars、秘密鍵はシークレット。
   **作り直すと既存の購読は無効になり、端末で登録し直しが要る**
 - iOSは対象外(Androidのみ)。ホーム画面から起動したPWAで動く
+
+## Discordの警報(2026/9/25)
+
+Web Push(上記、毎朝8:00 JST)とは別に、**夕方18:00 JST**にもう一段強い催促として、
+Discordの個人サーバーの `#alerts` チャンネルへ、アプリごとのWebhook経由でメンション付きの
+通知を送る。危うい場面(期限が今日・超過の未完了タスクがある)だけ送り、無ければ何も送らない。
+
+Web Pushと違い、Discordは他社サーバーであるためタスクの題名・内容は載せない。件数だけを伝える。
+
+```
+Cron Trigger (0 9 * * *)
+  └─ src/index.js の scheduled → notifyUrgent() (src/discord.js)
+       ├─ 期限が今日・超過の未完了タスクを数える(push.js の dueCounts、Web Pushと同じ基準)
+       ├─ 0件なら送らない。DISCORD_WEBHOOK_URL / DISCORD_USER_ID が未設定でも送らない
+       └─ Webhookへ POST { content: "<@ユーザーID> ToDo: ...", allowed_mentions: { users: [ユーザーID] } }
+```
+
+- 本文の例: `<@ユーザーID> ToDo: 期限が今日の未完了2件・期限切れ1件`(片方が0件ならその項目を省く)
+- `username` は指定しない。送り主はWebhookに設定した名前(`ToDo`)のまま
+- 送信失敗(fetch例外・非2xxレスポンス)は `console.error` に残し、例外は外へ投げない(cronを壊さない)
+- 重複の抑止: Cron Triggerが1日1回であることに任せ、送信済みかどうかの状態は持たない
+- 設定はシークレット2つ。値そのものは公開リポジトリに書かないため、ここには手順だけを置く
+
+```sh
+npx wrangler secret put DISCORD_WEBHOOK_URL   # Discordのチャンネル設定 → 連携サービス → Webhook のURL
+npx wrangler secret put DISCORD_USER_ID       # 開発者モードでユーザーを右クリック →「ユーザーIDをコピー」
+```
 
 ## 画面(2026/9/16)
 

@@ -96,10 +96,11 @@ async function broadcast(env) {
 
 const configured = (env) => Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
 
-/** Cron Trigger から呼ばれる。対象が無い日は、用のない通知で端末を起こさない */
-export async function notifyDue(env) {
-  if (!configured(env)) return { skipped: "鍵が未設定" };
-
+/**
+ * 未完了で期限がJSTの今日・超過のタスクを数える。Web Push(8:00)とDiscord警報(18:00)の
+ * どちらも同じ基準で数えるため、ここに一本化する
+ */
+export async function dueCounts(env) {
   const today = todayInJst();
   const counts = await env.DB.prepare(
     `SELECT SUM(CASE WHEN due = ? THEN 1 ELSE 0 END) AS due_today,
@@ -110,7 +111,15 @@ export async function notifyDue(env) {
     .bind(today, today)
     .first();
 
-  const target = (counts?.due_today ?? 0) + (counts?.overdue ?? 0);
+  return { dueToday: counts?.due_today ?? 0, overdue: counts?.overdue ?? 0 };
+}
+
+/** Cron Trigger から呼ばれる。対象が無い日は、用のない通知で端末を起こさない */
+export async function notifyDue(env) {
+  if (!configured(env)) return { skipped: "鍵が未設定" };
+
+  const { dueToday, overdue } = await dueCounts(env);
+  const target = dueToday + overdue;
   if (target === 0) return { skipped: "対象なし" };
 
   return { target, ...(await broadcast(env)) };

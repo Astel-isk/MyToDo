@@ -13,6 +13,7 @@ import { createMcpHandler } from "agents/mcp/server";
 import { createServer } from "./mcp.js";
 import appHandler from "./app-handler.js";
 import { notifyDue } from "./push.js";
+import { notifyUrgent } from "./discord.js";
 
 const mcpHandler = {
   // env をツールへ渡すため、リクエストごとにサーバを組み立てる
@@ -34,8 +35,15 @@ const provider = new OAuthProvider({
 export default {
   fetch: (request, env, ctx) => provider.fetch(request, env, ctx),
 
-  // wrangler.jsonc の crons は毎日 23:00 UTC = 翌 8:00 JST。
+  // wrangler.jsonc の crons は2つ。
+  //   0 23 * * *  毎日 23:00 UTC = 翌 8:00 JST(Web Push)
+  //   0  9 * * *  毎日  9:00 UTC =    18:00 JST(Discordの警報)
   // 送ったかどうかは後から画面で見えないので、結果をログに残す(wrangler tail で読む)
-  scheduled: (event, env, ctx) =>
-    ctx.waitUntil(notifyDue(env).then((result) => console.log("通知:", JSON.stringify(result)))),
+  scheduled: (event, env, ctx) => {
+    const task =
+      event.cron === "0 9 * * *"
+        ? notifyUrgent(env).then((result) => console.log("Discord警報:", JSON.stringify(result)))
+        : notifyDue(env).then((result) => console.log("通知:", JSON.stringify(result)));
+    ctx.waitUntil(task);
+  },
 };

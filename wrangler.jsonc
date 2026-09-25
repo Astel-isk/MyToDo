@@ -9,8 +9,9 @@
   "routes": [{ "pattern": "todo.astelisk.com", "custom_domain": true }],
   "workers_dev": false,
   "observability": { "enabled": true },
-  // 毎日 23:00 UTC = 翌 8:00 JST。期限の要約を1通送る
-  "triggers": { "crons": ["0 23 * * *"] },
+  // 0 23 * * *: 毎日 23:00 UTC = 翌 8:00 JST。Web Pushで期限の要約を1通送る
+  // 0  9 * * *: 毎日  9:00 UTC =    18:00 JST。Discordへメンション付きの警報を送る(危うい場合のみ)
+  "triggers": { "crons": ["0 23 * * *", "0 9 * * *"] },
   "vars": {
     // VAPIDの公開鍵。ブラウザに配るものなので秘密ではない(対の秘密鍵はシークレット)
     "VAPID_PUBLIC_KEY": "BG8zfkf4GTd7UjAdAoOnnAplWPMS5Illbl7qi0u5V1HFbtjQgi3O4eAAQGzFomzhZez3WE3_k1Gp7hqKEbbGWfo",
