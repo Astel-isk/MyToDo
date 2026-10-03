@@ -78,10 +78,19 @@ export function createServer(env) {
         tags: TAGS.optional().describe(
           "指定するとそのいずれかのタグを持つものだけを返す(いずれか1つでも一致すればよい)"
         ),
+        due_from: DUE.optional().describe(
+          "期限がこの日以降のものだけを返す(YYYY-MM-DD、当日を含む)。指定すると期限のないものは除かれる"
+        ),
+        due_to: DUE.optional().describe(
+          "期限がこの日以前のものだけを返す(YYYY-MM-DD、当日を含む)。指定すると期限のないものは除かれる"
+        ),
       },
     },
-    async ({ status, tags }) => {
-      const tasks = await listTasks(env, status || "open", normalizeTags(tags) || []);
+    async ({ status, tags, due_from, due_to }) => {
+      const tasks = await listTasks(env, status || "open", normalizeTags(tags) || [], {
+        dueFrom: due_from,
+        dueTo: due_to,
+      });
       return text(tasks.length ? tasks.map(line).join("\n") : "該当するタスクはありません");
     }
   );
@@ -89,7 +98,11 @@ export function createServer(env) {
   server.registerTool(
     "add_task",
     {
-      description: `ToDoを1件追加する。${SCOPE_NOTE}`,
+      description:
+        `ToDoを1件追加する。${SCOPE_NOTE}` +
+        "追加する前に、同じタスクが既にないかを確認する。期限があるタスクは list_tasks を status: \"all\"(完了済みを含む)と、" +
+        "期限の前後7日の due_from / due_to で呼ぶ。期限のないタスクは list_tasks を status: \"open\" で呼ぶ。" +
+        "同じタスクがあれば追加しない(完了済みなら、すでに済んでいる)。",
       inputSchema: {
         title: z.string().min(1).describe("やること。短く具体的に"),
         due: DUE.optional(),

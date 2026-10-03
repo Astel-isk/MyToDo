@@ -110,13 +110,25 @@ const SELECT_TASKS = `
 /**
  * 一覧。tags を渡すと、そのいずれかを持つタスクに絞る(OR)。
  * 単一の観点での複数選択は、絞り込むより広げる意図で使われるため。
+ * dueFrom / dueTo(YYYY-MM-DD、両端を含む)を渡すと期限の範囲で絞り、期限のないものは除く。
+ * 追加前の重複確認で、完了済みを含めても読む量が増え続けないようにするため。
  */
-export async function listTasks(env, status = "open", tags = []) {
+export async function listTasks(env, status = "open", tags = [], { dueFrom, dueTo } = {}) {
   const conditions = [];
   const values = [];
 
   if (status === "done") conditions.push("tasks.done = 1");
   else if (status !== "all") conditions.push("tasks.done = 0");
+
+  // 期限は YYYY-MM-DD の文字列で持っているため、文字列の比較がそのまま日付の比較になる
+  if (dueFrom) {
+    conditions.push("tasks.due >= ?");
+    values.push(dueFrom);
+  }
+  if (dueTo) {
+    conditions.push("tasks.due <= ?");
+    values.push(dueTo);
+  }
 
   if (tags.length > 0) {
     const placeholders = tags.map(() => "?").join(", ");
