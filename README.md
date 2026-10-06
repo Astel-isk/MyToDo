@@ -56,6 +56,7 @@
 | `src/mcp.js` | MCPツール6つの定義 |
 | `src/push.js` | プッシュ通知(VAPIDの署名・送信・宛先の管理、`dueCounts` による期限の集計) |
 | `src/discord.js` | Discordのメンション付き警報(Webhookへの送信) |
+| `src/myfit-sync.js` | myFITの課題の同期。規則の純粋関数 `planSync`、DBへの反映 `applySync`、締切の読み出し `listDue` |
 | `src/http.js` | 共通ヘルパ |
 | `schema.sql` / `migrations/` | 初期スキーマと追加分 |
 | `public/` | PWA一式(HTML / CSS / JS / manifest / Service Worker) |
@@ -92,6 +93,7 @@ npx wrangler d1 execute todo --local --file=schema.sql
 npx wrangler d1 execute todo --local --file=migrations/002_tags.sql
 npx wrangler d1 execute todo --local --file=migrations/003_push.sql
 npx wrangler d1 execute todo --local --file=migrations/004_login_attempts.sql
+npx wrangler d1 execute todo --local --file=migrations/005_myfit_links.sql
 npx wrangler dev
 ```
 
@@ -100,7 +102,7 @@ Discordの警報(下記)をローカルで試す場合は `DISCORD_WEBHOOK_URL` 
 未設定でも他の機能の開発には支障がない(警報だけが送られない)。
 
 ```sh
-npm test   # Discordの警報の本文生成・secret未設定時の抑止・fetch失敗時の扱い、一覧の期限範囲の絞り込みをnode:testで検証
+npm test   # Discordの警報の本文生成・secret未設定時の抑止・fetch失敗時の扱い、一覧の期限範囲の絞り込み、myFIT課題の同期の規則をnode:testで検証
 ```
 
 ### 検証
@@ -115,6 +117,7 @@ npm test   # Discordの警報の本文生成・secret未設定時の抑止・fet
 | Discordの警報の送信 | `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled?cron=0+9+*+*+*"` でcronを手で起こす。結果はログに出る。実際にDiscordへ送るには `.dev.vars` に本物のWebhook URLとユーザーIDが要る |
 | Discordの警報の組み立て・抑止 | `npm test`(node:test。fetchはモックし、実際の送信は行わない) |
 | 一覧の期限範囲の絞り込み | `npm test`(node:sqliteのメモリDBに本物のスキーマを当てる。Node 22.13未満では飛ばされる) |
+| myFIT課題の同期の規則 | `npm test`(`planSync` は純粋関数の単体テスト。`applySync` はメモリDBに schema.sql と migrations 002〜005 を当てて通す) |
 
 ## 総当たりへの備え
 
@@ -192,6 +195,98 @@ Cron Trigger (0 9 * * *)
 npx wrangler secret put DISCORD_WEBHOOK_URL   # Discordのチャンネル設定 → 連携サービス → Webhook のURL
 npx wrangler secret put DISCORD_USER_ID       # 開発者モードでユーザーを右クリック →「ユーザーIDをコピー」
 ```
+
+## myFITの課題の同期(TodoSync)
+
+myFIT(大学のLMS)の課題を、タスクとして自動で作成・更新・完了する。課題の「未提出」の印と、
+MyToDoの完了とが別々に管理されていたため、1つにまとめる目的。経路は次のとおり。
+
+```
+Chrome拡張(myfit-front) → PUT /api/myfit/assignments → MyBrief
+  → Service Binding(RPC) → MyToDo の TodoSync.syncAssignments(items)
+```
+
+MyBriefが受け取った一覧を、許可リストを通した後の形で渡してくる。呼ぶ条件や `TODO_SYNC` の運用は
+MyBriefのDESIGN.md §17が正で、ここには受け側の仕様だけを置く。
+
+### TodoSync(RPC)
+
+`src/index.js` の名前付きexport `TodoSync`(WorkerEntrypoint)。**Service Bindingからしか届かない**。
+公開URL(todo.astelisk.com)のルーティングには乗らず、PWA・REST API・MCPとは別の入口である。
+
+| メソッド | 内容 |
+|---|---|
+| `syncAssignments(items)` | 課題の一覧をタスクへ反映し、件数 `{created, updated, completed}` を返す。items は配列であることだけを確かめる(中身の検証は送り側のMyBriefが許可リストで済ませている) |
+| `listDue(dueTo)` | dueTo(`YYYY-MM-DD`、不正なら例外)以前が期限の未完了タスク。期限切れを含み、期限なしは含まない。`{id, title, due, note, tags}` だけを返す。MyBriefの `GET /api/todo/due` が使う |
+
+課題の1件は `{courseCode, courseName, name, start, end, status, unsubmitted}`。start・end は日本時間の
+`YYYY-MM-DD HH:mm` か空文字。ログに科目名・課題名・タスク名は出さない(件数だけ)。
+
+### myfit_links
+
+課題とタスクの結び付き(`migrations/005_myfit_links.sql`)。1行が1課題。
+
+| 列 | 内容 |
+|---|---|
+| `key` | 課題の同一性。`JSON.stringify([courseCode, name])` |
+| `task_id` | 結び付いたタスクのid。**NULL は「対象外」**で、同期は何もしない |
+| `last_end` | 最後に反映した end。締切の変更を見分けるために使う |
+
+`tasks` への外部キーは張らない。タスクは画面やMCPからいつでも消されうるため、CASCADEなら行も消えて
+次の同期でタスクが作り直され、消した意図が覆る。制限にすると、結び付いたタスクを消せなくなる。
+行を残したまま、タスクが無ければ「削除済み」として扱う。
+
+既存のタスクと突き合わせる(同じ課題のタスクを重複して作らせない)には、その課題の行を先に入れておく。
+既存のタスクに結び付けるなら `task_id` にそのid、同期の対象から外すなら NULL にする。
+
+```sh
+npx wrangler d1 execute todo --remote --command "INSERT INTO myfit_links (key, task_id, last_end) VALUES ('[\"A123\",\"第3回レポート\"]', NULL, NULL)"
+```
+
+### 規則
+
+key が同じ課題が一覧に2度出たら、最初の1件だけを見る。
+
+| 記号 | 条件 | 操作 |
+|---|---|---|
+| a | 未提出、end が空でない、end が現在(JST)より後、key が myfit_links に無い | タスクを作成し、myfit_links に行を足す |
+| b | 提出済み、key が links にあり task_id が非NULL、タスクが存在して未完了 | 完了にする(end が変わっていても完了だけ) |
+| c | 未提出、同上(links・task_id・存在・未完了)、end が空でなく last_end と違う | 期限とメモを作り直し、last_end を更新する |
+| d | それ以外 | 何もしない |
+
+d の具体例: task_id が NULL(対象外)、タスクが完了済み・削除済み(作り直さない・開き直さない)、
+一覧から消えた課題、締切を過ぎた未連携の課題、連携済みで end が空文字になったもの。
+
+作成するタスクの形:
+
+- 題名: `<科目名(空なら科目コード)> <課題名>を提出する`
+- 期限: end の日付部分
+- メモ: `myFIT・締切 HH:mm`
+- タグ: 「学業」が存在すればそれを付ける。無ければ付けない(`setTags` は存在しないタグを作るため、
+  `findUnknownTags` で確かめてから渡す)
+
+作成・更新・完了は `api.js` の `createTask` / `updateTask` を使うので、`done_at`・`updated_at` の扱いは
+手入力のタスクと同じ。
+
+### マイグレーション 005 の適用
+
+MyBrief側の同期は既定で off なので、先にMyToDoだけを反映してよい。順序は次のとおり。
+
+```sh
+npx wrangler d1 execute todo --remote --file=migrations/005_myfit_links.sql   # 1. テーブルを作る
+npx wrangler deploy                                                            # 2. TodoSync を含めてデプロイする
+```
+
+その後でMyBriefをデプロイする(binding の宛先 `TodoSync` が先に存在している必要がある)。
+`TODO_SYNC` を on にするのは、既存のタスクとの突き合わせを済ませてから。
+
+### 既知のリスク
+
+- **課題名の変更で二重になる**: key は課題名を含むため、先生が課題名を変えると別の課題と見なされ、
+  タスクが二重になる。古い方は手で消す(消したタスクは作り直されない)
+- **締切後の印の挙動は未確認**: unsubmitted はmyFITの「未提出」の列から作られる。締切後の受付終了で、
+  提出していなくても印が消えるかは確かめていない。消える場合は、未提出のまま締切を過ぎた課題が
+  自動で完了になる
 
 ## 画面(2026/9/16)
 
