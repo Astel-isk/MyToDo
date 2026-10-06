@@ -8,12 +8,14 @@
  * へ振り分ける。あわせて Cron Trigger からの起動(scheduled)を受ける。
  */
 
+import { WorkerEntrypoint } from "cloudflare:workers";
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp/server";
 import { createServer } from "./mcp.js";
 import appHandler from "./app-handler.js";
 import { notifyDue } from "./push.js";
 import { notifyUrgent } from "./discord.js";
+import { applySync, listDue } from "./myfit-sync.js";
 
 const mcpHandler = {
   // env をツールへ渡すため、リクエストごとにサーバを組み立てる
@@ -47,3 +49,31 @@ export default {
     ctx.waitUntil(task);
   },
 };
+
+/**
+ * Service Binding(RPC)の入口。MyBrief(Worker名 brief)から呼ばれる。
+ *
+ * ここには Service Binding からしか届かない。WorkerEntrypoint はURLにもルートにも
+ * 結び付かないので、公開URL(todo.astelisk.com)のルーティングには乗らず、認証も要らない
+ * (呼べるのは、同じアカウントで binding を宣言したWorkerだけ)。
+ * 規則は src/myfit-sync.js、結び付きは myfit_links(migrations/005_myfit_links.sql)にある。
+ */
+export class TodoSync extends WorkerEntrypoint {
+  /**
+   * myFITの課題の一覧をタスクへ反映し、件数 { created, updated, completed } を返す。
+   * 中身の検証はしない。許可リストを通した項目だけを送るのは送り側(MyBrief の src/myfit.js)で、
+   * ここでは配列であることだけを確かめる。
+   */
+  async syncAssignments(items) {
+    if (!Array.isArray(items)) throw new TypeError("items は配列です");
+    return applySync(this.env, items);
+  }
+
+  /**
+   * dueTo(YYYY-MM-DD、不正なら例外)以前が期限の未完了タスク。期限切れを含む。
+   * {id, title, due, note, tags} だけを返す。
+   */
+  async listDue(dueTo) {
+    return listDue(this.env, dueTo);
+  }
+}

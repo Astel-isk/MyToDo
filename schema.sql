@@ -2,6 +2,9 @@
 -- ローカル開発用DBの初期化:
 --   npx wrangler d1 execute todo --local --file=schema.sql
 --   npx wrangler d1 execute todo --local --file=migrations/002_tags.sql
+--   npx wrangler d1 execute todo --local --file=migrations/003_push.sql
+--   npx wrangler d1 execute todo --local --file=migrations/004_login_attempts.sql
+--   npx wrangler d1 execute todo --local --file=migrations/005_myfit_links.sql
 
 CREATE TABLE IF NOT EXISTS tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
