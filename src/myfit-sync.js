@@ -9,7 +9,7 @@
  * myfit_links に残し(migrations/005_myfit_links.sql)、同じ課題を二重に作らない。
  */
 
-import { createTask, updateTask, findUnknownTags, listTasks } from "./api.js";
+import { updateTask, setTags, findUnknownTags, listTasks } from "./api.js";
 
 /** 同期で課題のタスクに付けるタグ。存在するときだけ付ける(作らない) */
 const ACADEMIC_TAG = "学業";
@@ -141,7 +141,8 @@ async function readTasks(env, links) {
 
 /**
  * 課題の一覧をタスクへ反映する。戻り値は件数 { created, updated, completed }。
- * 作成・更新・完了は api.js の関数を使い、done_at・updated_at の扱いを手入力のタスクとそろえる。
+ * 更新・完了は api.js の関数を使い、done_at・updated_at の扱いを手入力のタスクとそろえる。
+ * 作成だけは結び付きと同じトランザクションで書くため、createTask と同じ INSERT を直接書く。
  * ログは呼び出し側が件数だけを出す(課題名・タスク名を含めないため、ここでは何も出さない)。
  */
 export async function applySync(env, items, date = new Date()) {
@@ -155,10 +156,21 @@ export async function applySync(env, items, date = new Date()) {
 
   for (const op of operations) {
     if (op.type === "create") {
-      const task = await createTask(env, op.fields, op.tags);
-      await env.DB.prepare("INSERT INTO myfit_links (key, task_id, last_end) VALUES (?, ?, ?)")
-        .bind(op.key, task.id, op.end)
-        .run();
+      // タスクと結び付きを1つの batch(D1ではトランザクション)で書く。別々に書くと、
+      // 結び付きの記録だけが失敗したときに、次の同期で同じ課題のタスクがもう1つ作られる。
+      // 同期が2本並行して同じ課題を作ろうとしても、後の方は key の重複で丸ごと取り消される
+      // (例外はそのまま投げ、呼び出し側のログに残す。残りは次の取り込みで反映される)
+      const [inserted] = await env.DB.batch([
+        env.DB.prepare("INSERT INTO tasks (title, note, due) VALUES (?, ?, ?) RETURNING id").bind(
+          op.fields.title,
+          op.fields.note,
+          op.fields.due
+        ),
+        env.DB.prepare(
+          "INSERT INTO myfit_links (key, task_id, last_end) VALUES (?, last_insert_rowid(), ?)"
+        ).bind(op.key, op.end),
+      ]);
+      if (op.tags.length > 0) await setTags(env, inserted.results[0].id, op.tags);
       counts.created++;
     } else if (op.type === "update") {
       // 読んでから書くまでの間にタスクが消されていれば null が返る。そのときは何も記録しない

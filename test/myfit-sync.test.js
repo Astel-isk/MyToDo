@@ -196,8 +196,18 @@ function makeEnv({ tags = ["学業"] } = {}) {
         };
         return self;
       },
+      // D1の batch と同じく、全体を1つのトランザクションで行い、各文の結果を返す
       batch: async (statements) => {
-        for (const statement of statements) await statement.run();
+        db.exec("BEGIN");
+        try {
+          const results = [];
+          for (const statement of statements) results.push(await statement.all());
+          db.exec("COMMIT");
+          return results;
+        } catch (e) {
+          db.exec("ROLLBACK");
+          throw e;
+        }
       },
     },
   };
@@ -274,6 +284,24 @@ test("applySync: 削除したタスクは作り直さず、対象外の行は何
   const counts = await applySync(env, [item({ end: "2026-10-10 17:30" }), other], at);
   assert.deepEqual(counts, { created: 0, updated: 0, completed: 0 });
   assert.equal(rows(env, "SELECT * FROM tasks").length, 0);
+});
+
+test("applySync: 結び付きが既にある課題を作ろうとしたら、タスクも作らずに取り消す", { skip }, async () => {
+  // 同期が2本並行し、両方が「未連携」と読んだ場合を、読み取りの後に行を差し込んで再現する
+  const env = makeEnv();
+  const originalPrepare = env.DB.prepare;
+  env.DB.prepare = (sql) => {
+    if (sql.startsWith("INSERT INTO tasks")) {
+      env.sqlite
+        .prepare("INSERT OR IGNORE INTO myfit_links (key, task_id, last_end) VALUES (?, 999, NULL)")
+        .run(KEY);
+    }
+    return originalPrepare(sql);
+  };
+
+  await assert.rejects(applySync(env, [item()], new Date("2026-10-06T03:00:00.000Z")));
+  assert.equal(rows(env, "SELECT * FROM tasks").length, 0);
+  assert.deepEqual(rows(env, "SELECT task_id FROM myfit_links"), [{ task_id: 999 }]);
 });
 
 // --- listDue ----------------------------------------------------------------
